@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Maths Invaders Ultimate</title>
+    <!-- Tailwind CSS pour la mise en page UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome pour les icônes -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&display=swap');
+
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-pink: #bc13fe;
+            --neon-green: #0aff0a;
+            --neon-red: #ff003c;
+            --neon-yellow: #f1c40f;
+            --bg-dark: #050510;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: white;
+            font-family: 'Rajdhani', sans-serif;
+            overflow: hidden;
+            /* Empêche le scroll pendant le jeu */
+            touch-action: none;
+            /* Empêche le zoom/scroll tactile */
+        }
+
+        .retro-font {
+            font-family: 'Press Start 2P', monospace;
+        }
+
+        /* Effets Néon */
+        .neon-text-blue {
+            text-shadow: 0 0 5px var(--neon-blue), 0 0 10px var(--neon-blue);
+            color: var(--neon-blue);
+        }
+
+        .neon-text-pink {
+            text-shadow: 0 0 5px var(--neon-pink), 0 0 10px var(--neon-pink);
+            color: var(--neon-pink);
+        }
+
+        .neon-border {
+            border: 2px solid var(--neon-blue);
+            box-shadow: 0 0 10px var(--neon-blue), inset 0 0 10px var(--neon-blue);
+        }
+
+        .btn-neon {
+            background: rgba(0, 243, 255, 0.1);
+            border: 2px solid var(--neon-blue);
+            color: var(--neon-blue);
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 0 5px var(--neon-blue);
+        }
+
+        .btn-neon:hover {
+            background: var(--neon-blue);
+            color: #000;
+            box-shadow: 0 0 20px var(--neon-blue);
+            transform: scale(1.05);
+        }
+
+        .btn-red {
+            border-color: var(--neon-red);
+            color: var(--neon-red);
+            background: rgba(255, 0, 60, 0.1);
+            box-shadow: 0 0 5px var(--neon-red);
+        }
+
+        .btn-red:hover {
+            background: var(--neon-red);
+            color: white;
+            box-shadow: 0 0 20px var(--neon-red);
+        }
+
+        /* Canvas */
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* UI Overlay Layers */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            /* Laisse passer les clics vers le canvas si pas sur un bouton */
+        }
+
+        .interactive {
+            pointer-events: auto;
+        }
+
+        .modal {
+            backdrop-filter: blur(5px);
+            background: rgba(5, 5, 16, 0.9);
+        }
+
+        /* Animations */
+        @keyframes pulse-red {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 0, 60, 0.7);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(255, 0, 60, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 0, 60, 0);
+            }
+        }
+
+        .difficulty-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Canvas du jeu -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- UI Layer -->
+    <div id="ui-layer" class="flex flex-col justify-between p-4">
+
+        <!-- HUD (Visible en jeu) -->
+        <div id="hud" class="hidden flex justify-between items-start w-full">
+            <div class="flex flex-col gap-2">
+                <div class="text-2xl font-bold neon-text-blue retro-font" id="scoreDisplay">SCORE: 0</div>
+                <div class="text-sm text-gray-300">NIVEAU: <span id="levelDisplay" class="text-yellow-400">1</span>
+                </div>
+            </div>
+
+            <div class="bg-black/50 border border-cyan-500 p-4 rounded-lg text-center transform scale-110">
+                <div class="text-xs text-cyan-300 uppercase tracking-widest mb-1">Cible</div>
+                <div class="text-4xl font-bold text-white retro-font" id="targetProblem">? x ?</div>
+            </div>
+
+            <div class="flex flex-col items-end gap-2">
+                <div class="text-xl text-green-400 font-bold" id="comboDisplay">COMBO x1</div>
+                <div class="h-2 w-32 bg-gray-800 rounded-full overflow-hidden border border-gray-600">
+                    <div id="healthBar" class="h-full bg-green-500 w-full transition-all duration-300"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bouton Pause (Mobile) -->
+        <div id="mobileControls" class="hidden absolute top-4 right-4 interactive">
+            <button id="pauseBtn" class="bg-gray-800 p-2 rounded border border-gray-600 text-white"><i
+                    class="fas fa-pause"></i></button>
+        </div>
+    </div>
+
+    <!-- MAIN MENU -->
+    <div id="mainMenu" class="interactive absolute inset-0 flex flex-col items-center justify-center bg-black z-20">
+        <h1 class="text-4xl md:text-6xl font-bold mb-2 neon-text-pink retro-font text-center leading-tight">MATHS
+            INVADERS<br><span class="text-3xl md:text-5xl neon-text-blue">ULTIMATE</span></h1>
+        <p class="text-cyan-200 mb-8 text-lg tracking-widest">APPRENEZ VOS TABLES EN JOUANT</p>
+
+        <div class="flex flex-col gap-4 w-64">
+            <button onclick="Game.start('marathon')" class="btn-neon py-3 px-6 rounded font-bold">
+                <i class="fas fa-rocket mr-2"></i> Mode Marathon
+            </button>
+            <button onclick="Game.start('focus')"
+                class="btn-neon py-3 px-6 rounded font-bold border-yellow-400 text-yellow-400 shadow-yellow-500/50">
+                <i class="fas fa-brain mr-2"></i> Mode Focus
+            </button>
+            <button onclick="Game.start('learning')"
+                class="btn-neon py-3 px-6 rounded font-bold border-green-400 text-green-400">
+                <i class="fas fa-graduation-cap mr-2"></i> Mode Apprentissage
+            </button>
+            <button onclick="UI.showSettings()"
+                class="btn-neon py-3 px-6 rounded font-bold border-gray-400 text-gray-300">
+                <i class="fas fa-cog mr-2"></i> Options & Tables
+            </button>
+            <button onclick="UI.showStats()"
+                class="btn-neon py-3 px-6 rounded font-bold border-purple-400 text-purple-400">
+                <i class="fas fa-chart-bar mr-2"></i> Statistiques Prof
+            </button>
+        </div>
+
+        <div class="mt-8 text-gray-500 text-xs text-center max-w-md px-4">
+            Utilisez les flèches pour bouger et ESPACE pour tirer.<br>
+            Sur tablette : touchez et glissez.
+        </div>
+    </div>
+
+    <!-- SETTINGS SCREEN -->
+    <div id="settingsScreen"
+        class="interactive hidden absolute inset-0 flex flex-col items-center justify-center bg-black z-30 overflow-y-auto">
+        <div class="w-full max-w-2xl p-6">
+            <h2 class="text-3xl font-bold neon-text-blue mb-6 text-center retro-font">SELECTION DES TABLES</h2>
+
+            <div class="grid grid-cols-3 md:grid-cols-5 gap-4 mb-8" id="tablesGrid">
+                <!-- Généré en JS -->
+            </div>
+
+            <div class="flex justify-center gap-4">
+                <button onclick="UI.toggleAllTables(true)"
+                    class="text-xs text-green-400 hover:text-white underline">Tout sélectionner</button>
+                <button onclick="UI.toggleAllTables(false)" class="text-xs text-red-400 hover:text-white underline">Tout
+                    désélectionner</button>
+            </div>
+
+            <div class="mt-8 text-center">
+                <button onclick="UI.hideSettings()" class="btn-neon py-2 px-8 rounded">RETOUR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STATS / GAME OVER SCREEN -->
+    <div id="statsScreen"
+        class="interactive hidden absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-40 overflow-y-auto p-4">
+        <h2 id="statsTitle" class="text-4xl font-bold neon-text-pink mb-4 retro-font mt-10">RAPPORT DE MISSION</h2>
+
+        <div class="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Global Stats -->
+            <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
+                <h3 class="text-xl text-cyan-400 mb-4 border-b border-gray-700 pb-2">Résumé</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-white" id="statScore">0</div>
+                        <div class="text-xs text-gray-400">Score Final</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-white" id="statAccuracy">0%</div>
+                        <div class="text-xs text-gray-400">Précision</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- To Review List -->
+            <div class="bg-gray-900 border border-red-900 p-4 rounded-lg">
+                <h3 class="text-xl text-red-400 mb-4 border-b border-gray-700 pb-2 flex justify-between">
+                    <span>À Réviser (Difficulté)</span>
+                    <i class="fas fa-exclamation-triangle"></i>
+                </h3>
+                <div id="reviewList" class="h-40 overflow-y-auto text-sm space-y-2">
+                    <!-- Rempli par JS -->
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full max-w-4xl mt-6">
+            <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
+                <h3 class="text-xl text-purple-400 mb-4 border-b border-gray-700 pb-2">Progression Globale</h3>
+                <div class="flex justify-between text-xs mb-2">
+                    <span class="text-green-400">Maîtrisé (<95%)< /span>
+                            <span class="text-yellow-400">En cours</span>
+                            <span class="text-red-400">Difficile</span>
+                </div>
+                <div class="h-4 w-full bg-gray-800 rounded-full overflow-hidden flex" id="globalProgressBar">
+                    <!-- Rempli par JS -->
+                </div>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap justify-center gap-4 mt-8 mb-8">
+            <button onclick="UI.returnToMenu()" class="btn-neon py-3 px-6 rounded">Menu Principal</button>
+            <button onclick="Game.restart()"
+                class="btn-neon py-3 px-6 rounded border-green-500 text-green-500">Rejouer</button>
+            <button onclick="DataManager.exportCSV()"
+                class="btn-neon py-3 px-6 rounded border-purple-500 text-purple-500 text-sm">
+                <i class="fas fa-file-csv"></i> Export CSV
+            </button>
+            <button onclick="DataManager.exportJSON()"
+                class="btn-neon py-3 px-6 rounded border-purple-500 text-purple-500 text-sm">
+                <i class="fas fa-file-code"></i> Export JSON
+            </button>
+            <button onclick="DataManager.resetData()" class="btn-red py-3 px-6 rounded text-xs">
+                <i class="fas fa-trash"></i> Reset Données
+            </button>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        /**
+         * MATHS INVADERS ULTIMATE
+         * Architecture:
+         * 1. DataManager: Gère le localStorage et les statistiques d'apprentissage.
+         * 2. MathEngine: Sélectionne les questions basées sur la difficulté.
+         * 3. GameEngine: Boucle de jeu, entités, physique.
+         * 4. Renderer: Dessine sur le canvas.
+         * 5. UI: Gère le DOM.
+         */
+
+        /* --- 1. DATA MANAGER & ADAPTIVE LEARNING --- */
+        const DataManager = {
+            storageKey: 'math_invaders_data_v1',
+            configKey: 'math_invaders_config_v1',
+            data: {}, // { "3x4": { attempts: 0, correct: 0, times: [], streak: 0, lastPlayed: timestamp } }
+            config: {
+                activeTables: [2, 3, 4, 5, 10], // Par défaut
+                soundEnabled: true
+            },
+
+            init() {
+                const storedData = localStorage.getItem(this.storageKey);
+                if (storedData) this.data = JSON.parse(storedData);
+
+                const storedConfig = localStorage.getItem(this.configKey);
+                if (storedConfig) this.config = JSON.parse(storedConfig);
+                else this.saveConfig();
+
+                // Initialize empty slots for all tables 1-12
+                for (let i = 1; i <= 10; i++) {
+                    for (let j = 1; j <= 10; j++) {
+                        const key = `${i}x${j}`;
+                        if (!this.data[key]) {
+                            this.data[key] = { attempts: 0, correct: 0, times: [], streak: 0, weight: 10 };
+                        }
+                    }
+                }
+            },
+
+            save() {
+                localStorage.setItem(this.storageKey, JSON.stringify(this.data));
+            },
+
+            saveConfig() {
+                localStorage.setItem(this.configKey, JSON.stringify(this.config));
+            },
+
+            recordResult(operandA, operandB, isCorrect, timeTakenMs) {
+                const key = `${operandA}x${operandB}`;
+                const entry = this.data[key];
+
+                entry.attempts++;
+                entry.lastPlayed = Date.now();
+
+                if (isCorrect) {
+                    entry.correct++;
+                    entry.streak++;
+                    // Keep last 5 times
+                    entry.times.push(timeTakenMs);
+                    if (entry.times.length > 5) entry.times.shift();
+                } else {
+                    entry.streak = 0;
+                }
+
+                // Recalculate Weight (Difficulty Score)
+                // Higher weight = Needs more practice
+                // Base weight 10. 
+                // Wrong answer adds massive weight.
+                // Correct answer reduces weight.
+                // Slow answer keeps weight high.
+
+                let successRate = entry.attempts > 0 ? (entry.correct / entry.attempts) : 0;
+                let avgTime = entry.times.length > 0 ? entry.times.reduce((a, b) => a + b, 0) / entry.times.length : 2000;
+
+                // Formule de pondération adaptative
+                let newWeight = 10;
+                if (successRate < 0.6) newWeight += 20; // Très difficile
+                else if (successRate < 0.85) newWeight += 10; // Moyen
+                else newWeight -= 5; // Facile
+
+                if (avgTime > 5000) newWeight += 5; // Trop lent
+                if (entry.streak > 3) newWeight -= 5; // Série en cours
+
+                entry.weight = Math.max(1, newWeight); // Min weight 1
+
+                this.save();
+            },
+
+            getStats(a, b) {
+                return this.data[`${a}x${b}`];
+            },
+
+            exportCSV() {
+                let csvContent = "data:text/csv;charset=utf-8,Multiplication,Tentatives,Correctes,Taux(%),TempsMoyen(ms),DernierJeu\n";
+                for (let key in this.data) {
+                    let d = this.data[key];
+                    if (d.attempts > 0) {
+                        let rate = Math.round((d.correct / d.attempts) * 100);
+                        let avg = d.times.length ? Math.round(d.times.reduce((a, b) => a + b) / d.times.length) : 0;
+                        let date = d.lastPlayed ? new Date(d.lastPlayed).toLocaleDateString() : "-";
+                        csvContent += `${key},${d.attempts},${d.correct},${rate},${avg},${date}\n`;
+                    }
+                }
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", "classe_maths_invaders.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            },
+
+            exportJSON() {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.data));
+                const link = document.createElement("a");
+                link.setAttribute("href", dataStr);
+                link.setAttribute("download", "classe_maths_invaders.json");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            },
+
+            resetData() {
+                if (confirm("Attention : Cela effacera toute la progression de l'élève. Continuer ?")) {
+                    localStorage.removeItem(this.storageKey);
+                    location.reload();
+                }
+            }
+        };
+
+        /* --- 1.5 AUDIO CONTROLLER --- */
+        const AudioController = {
+            ctx: null,
+            enabled: true,
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            },
+
+            playTone(freq, type, duration, vol = 0.1) {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            },
+
+            shoot() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.15);
+
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            },
+
+            explosion() {
+                if (!this.enabled || !this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 0.5;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+
+                noise.connect(gain);
+                gain.connect(this.ctx.destination);
+                noise.start();
+            },
+
+            correct() {
+                this.playTone(600, 'sine', 0.1, 0.1);
+                setTimeout(() => this.playTone(900, 'sine', 0.2, 0.1), 100);
+            },
+
+            wrong() {
+                this.playTone(150, 'sawtooth', 0.3, 0.15);
+            }
+        };
+
+        /* --- 2. MATH ENGINE --- */
+        const MathEngine = {
+            currentProblem: null,
+
+            generateProblem(mode) {
+                let pool = [];
+                const activeTables = DataManager.config.activeTables;
+
+                // Build weighted pool
+                for (let a of activeTables) {
+                    for (let b = 1; b <= 10; b++) {
+                        let key = `${a}x${b}`;
+                        let stats = DataManager.data[key];
+                        let w = stats.weight;
+
+                        if (mode === 'focus') {
+                            // En focus, on ignore ce qui est "facile" (weight < 8)
+                            if (w < 8) w = 0;
+                            else w = w * 2;
+                        }
+
+                        // Add to pool w times
+                        for (let k = 0; k < w; k++) {
+                            pool.push({ a, b });
+                        }
+                    }
+                }
+
+                // Fallback if pool is empty (focus mode completed or nothing selected)
+                if (pool.length === 0) {
+                    let a = activeTables[Math.floor(Math.random() * activeTables.length)];
+                    let b = Math.floor(Math.random() * 9) + 2;
+                    pool.push({ a, b });
+                }
+
+                const pick = pool[Math.floor(Math.random() * pool.length)];
+                this.currentProblem = {
+                    a: pick.a,
+                    b: pick.b,
+                    answer: pick.a * pick.b,
+                    startTime: Date.now()
+                };
+                return this.currentProblem;
+            },
+
+            getDecoys(correctAnswer) {
+                let decoys = new Set();
+                while (decoys.size < 3) {
+                    let d;
+                    const type = Math.random();
+                    if (type < 0.33) {
+                        // Close number
+                        d = correctAnswer + (Math.floor(Math.random() * 10) - 5);
+                    } else if (type < 0.66) {
+                        // Ending in same digit
+                        d = correctAnswer + 10;
+                    } else {
+                        // Random plausible
+                        d = Math.floor(Math.random() * 80) + 4;
+                    }
+                    if (d > 0 && d !== correctAnswer) decoys.add(d);
+                }
+                return Array.from(decoys);
+            }
+        };
+
+        /* --- 3. GAME ENGINE --- */
+        const Game = {
+            canvas: document.getElementById('gameCanvas'),
+            ctx: null,
+            state: 'menu', // menu, playing, paused, gameover
+            lastFrameTime: 0,
+
+            entities: {
+                player: null,
+                bullets: [],
+                enemies: [],
+                particles: [],
+                texts: []
+            },
+
+            score: 0,
+            combo: 0,
+            health: 100,
+            level: 1,
+            mode: 'marathon',
+
+            spawnTimer: 0,
+            spawnInterval: 2500, // ms
+
+            // Touch controls
+            touchX: null,
+            isFiring: false,
+
+            init() {
+                this.ctx = this.canvas.getContext('2d');
+                DataManager.init();
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+
+                // Controls
+                window.addEventListener('keydown', (e) => this.handleInput(e, true));
+                window.addEventListener('keyup', (e) => this.handleInput(e, false));
+
+                // Touch
+                this.canvas.addEventListener('touchstart', (e) => {
+                    this.isFiring = true;
+                    this.touchX = e.touches[0].clientX;
+                    AudioController.init(); // Init audio on touch
+                }, { passive: false });
+
+                this.canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    let rect = this.canvas.getBoundingClientRect();
+                    let x = e.touches[0].clientX - rect.left;
+                    if (this.entities.player) {
+                        this.entities.player.x = x;
+                    }
+                }, { passive: false });
+
+                this.canvas.addEventListener('touchend', () => {
+                    this.isFiring = false;
+                    this.touchX = null;
+                });
+
+                // Init audio on click anywhere (desktop)
+                window.addEventListener('click', () => AudioController.init(), { once: true });
+
+                requestAnimationFrame((t) => this.loop(t));
+                UI.renderTablesGrid();
+            },
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                if (this.entities.player) this.entities.player.y = this.canvas.height - 80;
+            },
+
+            start(mode) {
+                if (DataManager.config.activeTables.length === 0) {
+                    alert("Veuillez sélectionner au moins une table dans les options.");
+                    return;
+                }
+
+                AudioController.init();
+                this.mode = mode;
+                this.state = 'playing';
+                this.score = 0;
+                this.combo = 0;
+                this.health = 100;
+                this.level = 1;
+                this.spawnInterval = 3000;
+                this.entities = {
+                    player: { x: this.canvas.width / 2, y: this.canvas.height - 100, width: 40, height: 40, speed: 400, dx: 0 },
+                    bullets: [],
+                    enemies: [],
+                    particles: [],
+                    texts: []
+                };
+
+                UI.hideMenu();
+                UI.showHUD();
+                this.nextWave();
+            },
+
+            generateAsteroidShape(r) {
+                const points = [];
+                const numPoints = 8 + Math.floor(Math.random() * 6);
+                for (let i = 0; i < numPoints; i++) {
+                    const angle = (i / numPoints) * Math.PI * 2;
+                    const radius = r * (0.8 + Math.random() * 0.4); // Variation
+                    points.push({
+                        x: Math.cos(angle) * radius,
+                        y: Math.sin(angle) * radius
+                    });
+                }
+                return points;
+            },
+
+            nextWave() {
+                const problem = MathEngine.generateProblem(this.mode);
+                UI.updateTarget(problem.a, problem.b);
+
+                const answers = [problem.answer, ...MathEngine.getDecoys(problem.answer)];
+                // Shuffle
+                for (let i = answers.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [answers[i], answers[j]] = [answers[j], answers[i]];
+                }
+
+                const segment = this.canvas.width / answers.length;
+
+                answers.forEach((val, i) => {
+                    let isCorrect = (val === problem.answer);
+                    // Difficulty indicator for visual coding
+                    let difficultyColor = 'white'; // default
+
+                    // Only show hints in Learning Mode
+                    if (this.mode === 'learning' && isCorrect) {
+                        const key = `${problem.a}x${problem.b}`;
+                        const stats = DataManager.data[key];
+                        if (stats.weight < 5) difficultyColor = '#0aff0a'; // Green
+                        else if (stats.weight < 15) difficultyColor = '#f1c40f'; // Yellow
+                        else difficultyColor = '#ff003c'; // Red
+                    }
+
+                    const r = 35;
+                    this.entities.enemies.push({
+                        x: (i * segment) + (segment / 2),
+                        y: -50,
+                        value: val,
+                        isCorrect: isCorrect,
+                        r: r,
+                        shape: this.generateAsteroidShape(r),
+                        angle: Math.random() * Math.PI * 2,
+                        rotationSpeed: (Math.random() - 0.5) * 2, // Rad/s
+                        speed: 50 + (this.level * 10), // Vitesse augmente avec niveau
+                        color: difficultyColor
+                    });
+                });
+            },
+
+            restart() {
+                UI.hideStats();
+                this.start(this.mode);
+            },
+
+            handleInput(e, isDown) {
+                if (this.state !== 'playing') return;
+
+                if (e.code === 'Escape') {
+                    UI.returnToMenu();
+                    return;
+                }
+
+                if (e.code === 'ArrowLeft') this.entities.player.dx = isDown ? -1 : 0;
+                if (e.code === 'ArrowRight') this.entities.player.dx = isDown ? 1 : 0;
+                if (e.code === 'Space' && isDown) this.shoot();
+            },
+
+            shoot() {
+                AudioController.shoot();
+                this.entities.bullets.push({
+                    x: this.entities.player.x,
+                    y: this.entities.player.y - 20,
+                    r: 5,
+                    speed: 800
+                });
+            },
+
+            loop(timestamp) {
+                const dt = (timestamp - this.lastFrameTime) / 1000;
+                this.lastFrameTime = timestamp;
+
+                if (this.state === 'playing') {
+                    this.update(dt);
+                    this.draw();
+
+                    // Auto fire on mobile
+                    if (this.isFiring && Math.floor(timestamp / 200) % 2 === 0) { // limiter cadence
+                        // Simple cooldown hack
+                    }
+                }
+
+                requestAnimationFrame((t) => this.loop(t));
+            },
+
+            update(dt) {
+                // Player Move
+                const p = this.entities.player;
+                p.x += p.dx * p.speed * dt;
+                // Boundaries
+                if (p.x < p.width / 2) p.x = p.width / 2;
+                if (p.x > this.canvas.width - p.width / 2) p.x = this.canvas.width - p.width / 2;
+
+                // Bullets
+                for (let i = this.entities.bullets.length - 1; i >= 0; i--) {
+                    let b = this.entities.bullets[i];
+                    b.y -= b.speed * dt;
+                    if (b.y < 0) this.entities.bullets.splice(i, 1);
+                }
+
+                // Enemies
+                let enemiesCleared = true;
+                for (let i = this.entities.enemies.length - 1; i >= 0; i--) {
+                    let e = this.entities.enemies[i];
+                    enemiesCleared = false;
+                    e.y += e.speed * dt;
+                    e.angle += e.rotationSpeed * dt;
+
+                    // Collision Bullet-Enemy
+                    for (let j = this.entities.bullets.length - 1; j >= 0; j--) {
+                        let b = this.entities.bullets[j];
+                        let dx = b.x - e.x;
+                        let dy = b.y - e.y;
+                        let dist = Math.sqrt(dx * dx + dy * dy);
+
+                        if (dist < e.r + b.r) {
+                            // HIT
+                            this.createExplosion(e.x, e.y, e.isCorrect ? '#0aff0a' : '#ff003c');
+                            this.entities.bullets.splice(j, 1);
+
+                            if (e.isCorrect) {
+                                this.handleCorrectAnswer();
+                                // Remove all enemies of this wave
+                                this.entities.enemies = [];
+                                setTimeout(() => this.nextWave(), 500);
+                                return;
+                            } else {
+                                this.handleWrongAnswer(e.value);
+                                this.entities.enemies.splice(i, 1); // Remove wrong asteroid
+                            }
+                            break;
+                        }
+                    }
+
+                    // Collision Player-Enemy (Crash)
+                    let pdx = p.x - e.x;
+                    let pdy = p.y - e.y;
+                    let pdist = Math.sqrt(pdx * pdx + pdy * pdy);
+                    if (pdist < e.r + 20) {
+                        this.takeDamage(20);
+                        this.createExplosion(e.x, e.y, '#ffffff');
+                        this.entities.enemies.splice(i, 1);
+                        if (e.isCorrect) {
+                            // Si on percute la bonne réponse, ça compte comme une erreur mais on passe
+                            this.handleWrongAnswer("CRASH");
+                            this.entities.enemies = [];
+                            setTimeout(() => this.nextWave(), 1000);
+                            return;
+                        }
+                    }
+
+                    // Out of bounds
+                    if (e.y > this.canvas.height) {
+                        this.entities.enemies.splice(i, 1);
+                        if (e.isCorrect) {
+                            this.handleWrongAnswer("MISSED");
+                            this.entities.enemies = [];
+                            setTimeout(() => this.nextWave(), 500);
+                            return;
+                        }
+                    }
+                }
+
+                // Particles
+                for (let i = this.entities.particles.length - 1; i >= 0; i--) {
+                    let part = this.entities.particles[i];
+                    part.x += part.vx * dt;
+                    part.y += part.vy * dt;
+                    part.life -= dt;
+                    if (part.life <= 0) this.entities.particles.splice(i, 1);
+                }
+
+                // Float texts
+                for (let i = this.entities.texts.length - 1; i >= 0; i--) {
+                    let t = this.entities.texts[i];
+                    t.y -= 50 * dt;
+                    t.life -= dt;
+                    if (t.life <= 0) this.entities.texts.splice(i, 1);
+                }
+            },
+
+            handleCorrectAnswer() {
+                AudioController.correct();
+                const prob = MathEngine.currentProblem;
+                const timeTaken = Date.now() - prob.startTime;
+
+                DataManager.recordResult(prob.a, prob.b, true, timeTaken);
+
+                this.combo++;
+                this.score += 100 * this.combo;
+                this.health = Math.min(100, this.health + 5);
+
+                this.spawnFloatingText(this.entities.player.x, this.entities.player.y, "PARFAIT!", "#0aff0a");
+                UI.updateScore(this.score, this.combo, this.health);
+
+                // Level up every 5 correct
+                if (DataManager.data[`${prob.a}x${prob.b}`].correct % 5 === 0) {
+                    this.level = Math.min(10, this.level + 0.2);
+                    UI.updateLevel(Math.floor(this.level));
+                }
+            },
+
+            handleWrongAnswer(val) {
+                AudioController.wrong();
+                const prob = MathEngine.currentProblem;
+                DataManager.recordResult(prob.a, prob.b, false, 0);
+
+                this.combo = 0;
+                this.takeDamage(15);
+                this.spawnFloatingText(this.entities.player.x, this.entities.player.y, "NON!", "#ff003c");
+                UI.updateScore(this.score, this.combo, this.health);
+            },
+
+            takeDamage(amount) {
+                this.health -= amount;
+                // Screen shake effect
+                this.canvas.style.transform = `translate(${Math.random() * 10 - 5}px, ${Math.random() * 10 - 5}px)`;
+                setTimeout(() => this.canvas.style.transform = "none", 200);
+
+                if (this.health <= 0) {
+                    this.gameOver();
+                }
+            },
+
+            createExplosion(x, y, color) {
+                AudioController.explosion();
+                for (let i = 0; i < 15; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = Math.random() * 200 + 50;
+                    this.entities.particles.push({
+                        x: x, y: y,
+                        vx: Math.cos(angle) * speed,
+                        vy: Math.sin(angle) * speed,
+                        life: 0.5 + Math.random() * 0.5,
+                        color: color
+                    });
+                }
+            },
+
+            spawnFloatingText(x, y, text, color) {
+                this.entities.texts.push({
+                    x, y, text, color, life: 1.0
+                });
+            },
+
+            draw() {
+                // Clear
+                this.ctx.fillStyle = '#050510';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Grid background (Retro effect)
+                this.ctx.strokeStyle = 'rgba(0, 243, 255, 0.1)';
+                this.ctx.lineWidth = 1;
+                const gridSize = 50;
+                const offset = (Date.now() / 50) % gridSize;
+
+                // Vertical lines
+                for (let x = 0; x < this.canvas.width; x += gridSize) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, 0);
+                    this.ctx.lineTo(x, this.canvas.height);
+                    this.ctx.stroke();
+                }
+                // Horizontal (moving)
+                for (let y = offset; y < this.canvas.height; y += gridSize) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(0, y);
+                    this.ctx.lineTo(this.canvas.width, y);
+                    this.ctx.stroke();
+                }
+
+                // Draw Player
+                const p = this.entities.player;
+                this.ctx.save();
+                this.ctx.translate(p.x, p.y);
+
+                // Ship shape
+                this.ctx.beginPath();
+                this.ctx.moveTo(0, -20);
+                this.ctx.lineTo(15, 15);
+                this.ctx.lineTo(0, 10);
+                this.ctx.lineTo(-15, 15);
+                this.ctx.closePath();
+
+                this.ctx.fillStyle = '#000';
+                this.ctx.shadowBlur = 15;
+                this.ctx.shadowColor = '#00f3ff';
+                this.ctx.strokeStyle = '#00f3ff';
+                this.ctx.lineWidth = 2;
+                this.ctx.fill();
+                this.ctx.stroke();
+
+                // Thruster flame
+                this.ctx.beginPath();
+                this.ctx.moveTo(-5, 15);
+                this.ctx.lineTo(0, 25 + Math.random() * 10);
+                this.ctx.lineTo(5, 15);
+                this.ctx.fillStyle = '#bc13fe';
+                this.ctx.shadowColor = '#bc13fe';
+                this.ctx.fill();
+
+                this.ctx.restore();
+
+                // Draw Enemies
+                this.entities.enemies.forEach(e => {
+                    this.ctx.save();
+                    this.ctx.translate(e.x, e.y);
+                    this.ctx.rotate(e.angle); // Rotate
+
+                    // Draw Asteroid Shape
+                    this.ctx.beginPath();
+                    if (e.shape && e.shape.length > 0) {
+                        this.ctx.moveTo(e.shape[0].x, e.shape[0].y);
+                        for (let i = 1; i < e.shape.length; i++) {
+                            this.ctx.lineTo(e.shape[i].x, e.shape[i].y);
+                        }
+                    } else {
+                        // Fallback
+                        this.ctx.arc(0, 0, e.r, 0, Math.PI * 2);
+                    }
+                    this.ctx.closePath();
+
+                    this.ctx.fillStyle = '#111';
+                    this.ctx.fill();
+
+                    this.ctx.lineWidth = 3;
+                    this.ctx.strokeStyle = e.color;
+                    this.ctx.shadowBlur = 10;
+                    this.ctx.shadowColor = e.color;
+                    this.ctx.stroke();
+
+                    // Learning Mode Hint
+                    if (this.mode === 'learning' && e.isCorrect) {
+                        this.ctx.strokeStyle = 'white';
+                        this.ctx.setLineDash([5, 5]);
+                        this.ctx.stroke();
+                        this.ctx.setLineDash([]);
+                    }
+
+                    // Text (Rotate back so text is straight)
+                    this.ctx.rotate(-e.angle);
+
+                    this.ctx.fillStyle = '#fff';
+                    this.ctx.shadowBlur = 0;
+                    this.ctx.font = '20px "Press Start 2P"';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText(e.value, 0, 5); // Slight offset
+
+                    this.ctx.restore();
+                });
+
+                // Draw Bullets
+                this.ctx.fillStyle = '#bc13fe';
+                this.ctx.shadowBlur = 10;
+                this.ctx.shadowColor = '#bc13fe';
+                this.entities.bullets.forEach(b => {
+                    this.ctx.beginPath();
+                    this.ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+                    this.ctx.fill();
+                });
+
+                // Draw Particles
+                this.entities.particles.forEach(p => {
+                    this.ctx.globalAlpha = p.life;
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.globalAlpha = 1;
+                });
+
+                // Draw Floating Texts
+                this.entities.texts.forEach(t => {
+                    this.ctx.globalAlpha = t.life;
+                    this.ctx.fillStyle = t.color;
+                    this.ctx.font = '16px "Press Start 2P"';
+                    this.ctx.fillText(t.text, t.x, t.y);
+                    this.ctx.globalAlpha = 1;
+                });
+            },
+
+            gameOver() {
+                this.state = 'gameover';
+                UI.showStats();
+            }
+        };
+
+        /* --- 4. UI MANAGER --- */
+        const UI = {
+            hideMenu() { document.getElementById('mainMenu').classList.add('hidden'); },
+            showMenu() {
+                document.getElementById('mainMenu').classList.remove('hidden');
+                document.getElementById('statsScreen').classList.add('hidden');
+                document.getElementById('hud').classList.add('hidden');
+            },
+            showHUD() { document.getElementById('hud').classList.remove('hidden'); },
+
+            updateTarget(a, b) {
+                document.getElementById('targetProblem').innerHTML = `${a} <span class="text-gray-500">x</span> ${b}`;
+            },
+
+            updateScore(score, combo, health) {
+                document.getElementById('scoreDisplay').innerText = `SCORE: ${score}`;
+                document.getElementById('comboDisplay').innerText = `COMBO x${combo}`;
+                const bar = document.getElementById('healthBar');
+                bar.style.width = `${health}%`;
+                bar.className = `h-full transition-all duration-300 ${health < 30 ? 'bg-red-500' : 'bg-green-500'}`;
+            },
+
+            updateLevel(lvl) {
+                document.getElementById('levelDisplay').innerText = lvl;
+            },
+
+            showSettings() {
+                document.getElementById('settingsScreen').classList.remove('hidden');
+            },
+            hideSettings() {
+                document.getElementById('settingsScreen').classList.add('hidden');
+                DataManager.saveConfig();
+            },
+
+            renderTablesGrid() {
+                const container = document.getElementById('tablesGrid');
+                container.innerHTML = '';
+                for (let i = 2; i <= 10; i++) {
+                    const isActive = DataManager.config.activeTables.includes(i);
+                    const btn = document.createElement('button');
+                    btn.className = `p-3 rounded border text-center font-bold transition-all ${isActive ? 'border-cyan-400 bg-cyan-900/30 text-cyan-400' : 'border-gray-700 text-gray-600'}`;
+                    btn.innerText = `Table de ${i}`;
+                    btn.onclick = () => {
+                        this.toggleTable(i);
+                        this.renderTablesGrid();
+                    };
+                    container.appendChild(btn);
+                }
+            },
+
+            toggleTable(n) {
+                const idx = DataManager.config.activeTables.indexOf(n);
+                if (idx > -1) DataManager.config.activeTables.splice(idx, 1);
+                else DataManager.config.activeTables.push(n);
+                DataManager.config.activeTables.sort((a, b) => a - b);
+            },
+
+            toggleAllTables(state) {
+                if (state) DataManager.config.activeTables = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+                else DataManager.config.activeTables = [];
+                this.renderTablesGrid();
+            },
+
+            showStats() {
+                document.getElementById('statsScreen').classList.remove('hidden');
+                document.getElementById('hud').classList.add('hidden');
+
+                document.getElementById('statsTitle').innerText = Game.state === 'gameover' ? "MISSION TERMINÉE" : "RAPPORT PROF";
+                document.getElementById('statScore').innerText = Game.score;
+
+                // Calculate detailed stats
+                let totalAttempts = 0;
+                let totalCorrect = 0;
+                let reviewItems = [];
+                let mastered = 0, learning = 0, hard = 0;
+
+                for (let key in DataManager.data) {
+                    const d = DataManager.data[key];
+                    if (d.attempts > 0) {
+                        totalAttempts += d.attempts;
+                        totalCorrect += d.correct;
+                        const rate = d.correct / d.attempts;
+
+                        // Categorization
+                        if (rate < 0.8) {
+                            hard++;
+                            reviewItems.push({ key, rate, attempts: d.attempts });
+                        } else if (rate < 0.95) {
+                            learning++;
+                        } else {
+                            mastered++;
+                        }
+                    }
+                }
+
+                // Accuracy
+                const acc = totalAttempts > 0 ? Math.round((totalCorrect / totalAttempts) * 100) : 0;
+                document.getElementById('statAccuracy').innerText = `${acc}%`;
+
+                // Fill Review List (Top 5 worst)
+                reviewItems.sort((a, b) => a.rate - b.rate);
+                const list = document.getElementById('reviewList');
+                list.innerHTML = '';
+                if (reviewItems.length === 0) {
+                    list.innerHTML = '<div class="text-green-400 text-center py-4">Rien à signaler. Excellent travail !</div>';
+                } else {
+                    reviewItems.slice(0, 10).forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = "flex justify-between items-center bg-black/50 p-2 rounded border-l-2 border-red-500";
+                        div.innerHTML = `
+                            <span class="font-bold text-white">${item.key}</span>
+                            <span class="text-xs text-red-300">${Math.round(item.rate * 100)}% (sur ${item.attempts} essais)</span>
+                        `;
+                        list.appendChild(div);
+                    });
+                }
+
+                // Global Progress Bar
+                const totalActive = mastered + learning + hard;
+                if (totalActive > 0) {
+                    const pBar = document.getElementById('globalProgressBar');
+                    const pctMaster = (mastered / totalActive) * 100;
+                    const pctLearn = (learning / totalActive) * 100;
+                    const pctHard = (hard / totalActive) * 100;
+
+                    pBar.innerHTML = `
+                        <div style="width:${pctMaster}%" class="bg-green-500 h-full"></div>
+                        <div style="width:${pctLearn}%" class="bg-yellow-500 h-full"></div>
+                        <div style="width:${pctHard}%" class="bg-red-500 h-full"></div>
+                    `;
+                }
+            },
+
+            returnToMenu() {
+                Game.state = 'menu';
+                this.showMenu();
+            }
+        };
+
+        // Start
+        window.onload = () => Game.init();
+
+    </script>
+</body>
+
+</html>
