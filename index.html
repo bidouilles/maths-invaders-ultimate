@@ -548,9 +548,11 @@
                 noise.start();
             },
 
-            correct() {
-                this.playTone(600, 'sine', 0.1, 0.1);
-                setTimeout(() => this.playTone(900, 'sine', 0.2, 0.1), 100);
+            correct(combo = 0) {
+                // Pitch increases with combo, capped at 2.0x (approx 1 octave)
+                const pitch = 1 + Math.min(1.0, combo * 0.1);
+                this.playTone(600 * pitch, 'sine', 0.1, 0.1);
+                setTimeout(() => this.playTone(900 * pitch, 'sine', 0.2, 0.1), 100);
             },
 
             wrong() {
@@ -657,6 +659,7 @@
             // Visuals
             flashAlpha: 0,
             screenShake: 0,
+            shakeIntensity: 0,
 
             spawnTimer: 0,
             spawnInterval: 2500, // ms
@@ -710,7 +713,9 @@
 
                 this.loop = this.loop.bind(this);
                 requestAnimationFrame(this.loop);
-                UI.renderTablesGrid();
+                this.loop = this.loop.bind(this);
+                requestAnimationFrame(this.loop);
+                UI.init(); // Initialize all UI components
             },
 
             resize() {
@@ -782,10 +787,10 @@
             spawnPowerUp(x, y) {
                 if (Math.random() > 0.15) return; // 15% chance
                 const rand = Math.random();
-                let type = 'TRIPLE';
-                if (rand < 0.4) type = 'TRIPLE';
-                else if (rand < 0.7) type = 'SHIELD';
-                else if (rand < 0.85) type = 'WARP';
+                let type = 'SMART';
+                if (rand < 0.3) type = 'SMART';
+                else if (rand < 0.6) type = 'SHIELD';
+                else if (rand < 0.8) type = 'WARP';
                 else type = 'FREEZE';
 
                 this.entities.powerups.push({
@@ -847,7 +852,7 @@
                         shape: this.generateAsteroidShape(r),
                         angle: Math.random() * Math.PI * 2,
                         rotationSpeed: (Math.random() - 0.5) * 2, // Rad/s
-                        speed: 50 + (this.level * 10), // Vitesse augmente avec niveau
+                        speed: 50 + (this.level * 15), // Vitesse augmente plus vite (was 10)
                         color: difficultyColor
                     });
                 });
@@ -872,27 +877,17 @@
             },
 
             shoot() {
+                if (this.state !== 'playing') return;
                 AudioController.shoot();
 
-                if (this.powerups.tripleShot.active) {
-                    [-15, 0, 15].forEach(offset => {
-                        this.entities.bullets.push({
-                            x: this.entities.player.x + offset,
-                            y: this.entities.player.y - 20,
-                            r: 5,
-                            speed: 800,
-                            angle: offset * 0.01
-                        });
-                    });
-                } else {
-                    this.entities.bullets.push({
-                        x: this.entities.player.x,
-                        y: this.entities.player.y - 20,
-                        r: 5,
-                        speed: 800,
-                        angle: 0
-                    });
-                }
+                // Standard shot
+                this.entities.bullets.push({
+                    x: this.entities.player.x,
+                    y: this.entities.player.y - 20,
+                    speed: 800,
+                    r: 4,
+                    angle: 0
+                });
             },
 
             loop(timestamp) {
@@ -967,6 +962,19 @@
                             this.powerups.tripleShot.active = true;
                             this.powerups.tripleShot.timer = 5;
                             this.spawnFloatingText(this.entities.player.x, this.entities.player.y, "TRIPLE TIR!", "#00f3ff");
+                        } else if (p.type === 'SMART') {
+                            // Smart Bomb: Destroy all decoys
+                            this.spawnFloatingText(this.entities.player.x, this.entities.player.y, "SMART BOMB!", "#ff003c");
+                            this.entities.enemies.forEach((e, idx) => {
+                                if (!e.isCorrect) {
+                                    this.createExplosion(e.x, e.y, e.color);
+                                    // Mark for removal (we'll filter them out or handle in next frame, but simpler to just set health or flag)
+                                    e.dead = true;
+                                }
+                            });
+                            // Filter out dead enemies immediately
+                            this.entities.enemies = this.entities.enemies.filter(e => !e.dead);
+
                         } else if (p.type === 'SHIELD') {
                             this.powerups.shield.active = true;
                             this.spawnFloatingText(this.entities.player.x, this.entities.player.y, "BOUCLIER!", "#bc13fe");
@@ -989,10 +997,6 @@
                 }
 
                 // Powerup Timers
-                if (this.powerups.tripleShot.active) {
-                    this.powerups.tripleShot.timer -= dt;
-                    if (this.powerups.tripleShot.timer <= 0) this.powerups.tripleShot.active = false;
-                }
                 if (this.powerups.warp.active) {
                     this.powerups.warp.timer -= dt / 2.5; // Real time
                     if (this.powerups.warp.timer <= 0) {
@@ -1033,9 +1037,15 @@
 
                             if (e.isCorrect) {
                                 this.handleCorrectAnswer();
+                                // Score Popup
+                                this.spawnFloatingText(e.x, e.y, `+${100 * this.combo}`, '#0aff0a');
+                                // Screen Shake
+                                this.shakeIntensity = 5;
+
                                 // Remove all enemies of this wave
                                 this.entities.enemies = [];
-                                setTimeout(() => this.nextWave(), 500);
+                                const delay = Math.max(200, 1000 - (this.level * 80));
+                                setTimeout(() => this.nextWave(), delay);
                                 return;
                             } else {
                                 this.handleWrongAnswer(e.value);
@@ -1057,7 +1067,8 @@
                             // Si on percute la bonne réponse, ça compte comme une erreur mais on passe
                             this.handleWrongAnswer("CRASH");
                             this.entities.enemies = [];
-                            setTimeout(() => this.nextWave(), 1000);
+                            const delay = Math.max(200, 1000 - (this.level * 80));
+                            setTimeout(() => this.nextWave(), delay + 500); // Little extra delay for crash
                             return;
                         }
                     }
@@ -1068,7 +1079,8 @@
                         if (e.isCorrect) {
                             this.handleWrongAnswer("MISSED");
                             this.entities.enemies = [];
-                            setTimeout(() => this.nextWave(), 500);
+                            const delay = Math.max(200, 1000 - (this.level * 80));
+                            setTimeout(() => this.nextWave(), delay);
                             return;
                         }
                     }
@@ -1093,7 +1105,7 @@
             },
 
             handleCorrectAnswer() {
-                AudioController.correct();
+                AudioController.correct(this.combo);
                 const prob = MathEngine.currentProblem;
                 const timeTaken = Date.now() - prob.startTime;
 
@@ -1103,12 +1115,16 @@
                 this.score += 100 * this.combo;
                 this.health = Math.min(100, this.health + 5);
 
-                this.spawnFloatingText(this.entities.player.x, this.entities.player.y, "PARFAIT!", "#0aff0a");
+                // Combo Milestones
+                if (this.combo === 10) this.spawnFloatingText(this.canvas.width / 2, this.canvas.height / 2, "EPIC!", "#f1c40f", 2.0);
+                if (this.combo === 20) this.spawnFloatingText(this.canvas.width / 2, this.canvas.height / 2, "UNSTOPPABLE!", "#bc13fe", 2.0);
+                if (this.combo === 30) this.spawnFloatingText(this.canvas.width / 2, this.canvas.height / 2, "GODLIKE!", "#ff003c", 3.0);
+
                 UI.updateScore(this.score, this.combo, this.health);
 
                 // Level up every 5 correct
                 if (DataManager.data[`${prob.a}x${prob.b}`].correct % 5 === 0) {
-                    this.level = Math.min(10, this.level + 0.2);
+                    this.level = Math.min(10, this.level + 0.5); // Faster leveling (was 0.2)
                     UI.updateLevel(Math.floor(this.level));
                     this.flashAlpha = 0.5; // Flash on level up
                 }
@@ -1138,8 +1154,7 @@
 
                 this.health -= amount;
                 // Screen shake effect
-                this.canvas.style.transform = `translate(${Math.random() * 10 - 5}px, ${Math.random() * 10 - 5}px)`;
-                setTimeout(() => this.canvas.style.transform = "none", 200);
+                this.shakeIntensity = 10;
 
                 if (this.health <= 0) {
                     this.gameOver();
@@ -1149,22 +1164,23 @@
             createExplosion(x, y, color) {
                 AudioController.explosion();
                 this.spawnPowerUp(x, y); // Try spawn powerup
-                for (let i = 0; i < 15; i++) {
+                const count = 20 + Math.random() * 10; // More particles
+                for (let i = 0; i < count; i++) {
                     const angle = Math.random() * Math.PI * 2;
                     const speed = Math.random() * 200 + 50;
                     this.entities.particles.push({
                         x: x, y: y,
                         vx: Math.cos(angle) * speed,
                         vy: Math.sin(angle) * speed,
-                        life: 0.5 + Math.random() * 0.5,
+                        life: 0.8 + Math.random() * 0.5, // Longer life
                         color: color
                     });
                 }
             },
 
-            spawnFloatingText(x, y, text, color) {
+            spawnFloatingText(x, y, text, color, life = 1.0) {
                 this.entities.texts.push({
-                    x, y, text, color, life: 1.0
+                    x, y, text, color, life: life, maxLife: life
                 });
             },
 
@@ -1173,7 +1189,14 @@
                 this.ctx.fillStyle = '#050510';
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-                // Draw Stars (Parallax)
+                // Apply Screen Shake
+                this.ctx.save();
+                if (this.shakeIntensity > 0) {
+                    const dx = (Math.random() - 0.5) * this.shakeIntensity;
+                    const dy = (Math.random() - 0.5) * this.shakeIntensity;
+                    this.ctx.translate(dx, dy);
+                    this.shakeIntensity = Math.max(0, this.shakeIntensity - 0.5); // Decay
+                }
                 this.ctx.fillStyle = '#ffffff';
                 this.entities.stars.forEach(s => {
                     this.ctx.globalAlpha = Math.random() * 0.5 + 0.3;
@@ -1274,7 +1297,7 @@
 
                     let color = '#fff';
                     let label = '?';
-                    if (p.type === 'TRIPLE') { color = '#00f3ff'; label = '3x'; }
+                    if (p.type === 'SMART') { color = '#ff003c'; label = 'B'; }
                     else if (p.type === 'SHIELD') { color = '#bc13fe'; label = 'S'; }
                     else if (p.type === 'WARP') { color = '#f1c40f'; label = 'W'; }
                     else if (p.type === 'FREEZE') { color = '#0aff0a'; label = 'F'; }
@@ -1374,6 +1397,8 @@
                     this.ctx.fillStyle = `rgba(255, 255, 255, ${this.flashAlpha})`;
                     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
                 }
+
+                this.ctx.restore(); // End Screen Shake
             },
 
             gameOver() {
@@ -1516,8 +1541,9 @@
             },
             hideSettings() {
                 document.getElementById('settingsScreen').classList.add('hidden');
-                DataManager.saveConfig();
+                DataManager.save();
             },
+
 
             renderTablesGrid() {
                 const container = document.getElementById('tablesGrid');
