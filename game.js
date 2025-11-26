@@ -342,6 +342,16 @@ const Game = {
         shield: { active: false }
     },
 
+    quest: {
+        active: false,
+        goal: 0,
+        progress: 0,
+        timer: 0,
+        limit: 0,
+        desc: ''
+    },
+    questCooldown: 0,
+
     // Visuals
     flashAlpha: 0,
     screenShake: 0,
@@ -432,6 +442,8 @@ const Game = {
         this.bossActive = false;
         this.bossHP = 0;
         this.bossMaxHP = 0;
+        this.quest = { active: false, goal: 0, progress: 0, timer: 0, limit: 0, desc: '' };
+        this.questCooldown = 2;
         this.spawnInterval = 3000;
         this.entities = {
             player: {
@@ -467,6 +479,7 @@ const Game = {
         UI.showHUD();
         UI.updateScore(this.score, this.combo, this.health);
         UI.updateLevel(Math.floor(this.level));
+        UI.updateQuest({ desc: "Prochaine quête...", progressText: "" });
         this.nextWave();
     },
 
@@ -709,6 +722,25 @@ const Game = {
             this.shoot();
         }
 
+        // Quests cooldown / timers
+        if (this.questCooldown > 0) {
+            this.questCooldown -= dt;
+            if (this.questCooldown <= 0 && !this.quest.active) {
+                this.startQuest();
+            }
+        }
+        if (this.quest.active) {
+            this.quest.timer -= dt;
+            if (this.quest.timer <= 0) {
+                this.failQuest();
+            } else {
+                UI.updateQuest({
+                    desc: this.quest.desc,
+                    progressText: `${this.quest.progress}/${this.quest.goal} · ${Math.ceil(this.quest.timer)}s`
+                });
+            }
+        }
+
         this.update(dt);
         this.draw();
         requestAnimationFrame(this.loop);
@@ -942,6 +974,13 @@ const Game = {
         this.score += 100 * this.combo;
         this.health = Math.min(100, this.health + 5);
 
+        if (this.quest.active) {
+            this.quest.progress += 1;
+            if (this.quest.progress >= this.quest.goal) {
+                this.completeQuest();
+            }
+        }
+
         // Combo Milestones
         if (this.combo === 10) this.spawnFloatingText(this.canvas.width / 2, this.canvas.height / 2, "EPIC!", "#f1c40f", 2.0);
         if (this.combo === 20) this.spawnFloatingText(this.canvas.width / 2, this.canvas.height / 2, "UNSTOPPABLE!", "#bc13fe", 2.0);
@@ -970,6 +1009,13 @@ const Game = {
         AudioController.wrong();
         if (this.currentProblem) {
             this.sessionMistakes.push(`${this.currentProblem.a} x ${this.currentProblem.b} = ${this.currentProblem.answer}`);
+        }
+        if (this.quest.active) {
+            this.quest.progress = 0;
+            UI.updateQuest({
+                desc: this.quest.desc,
+                progressText: `${this.quest.progress}/${this.quest.goal} · ${Math.ceil(this.quest.timer)}s`
+            });
         }
         const prob = MathEngine.currentProblem;
         DataManager.recordResult(prob.a, prob.b, false, 0);
@@ -1018,6 +1064,49 @@ const Game = {
         this.entities.texts.push({
             x, y, text, color, life: life, maxLife: life
         });
+    },
+
+    startQuest() {
+        // Simple streak quest: N correct in a time limit
+        const goals = [3, 4, 5];
+        const goal = goals[Math.floor(Math.random() * goals.length)];
+        const limit = 8 + goal * 2; // 14-18s typical
+
+        this.quest = {
+            active: true,
+            goal,
+            progress: 0,
+            timer: limit,
+            limit,
+            desc: `Enchaîne ${goal} bonnes réponses`
+        };
+        UI.updateQuest({ desc: this.quest.desc, progressText: `0/${goal} · ${Math.ceil(limit)}s` });
+        this.spawnFloatingText(this.canvas.width / 2, 120, "NOUVELLE QUÊTE!", "#00f3ff", 1.5);
+    },
+
+    completeQuest() {
+        this.quest.active = false;
+        this.questCooldown = 8;
+        this.spawnFloatingText(this.canvas.width / 2, this.canvas.height / 2, "QUÊTE RÉUSSIE!", "#0aff0a", 2.0);
+        UI.updateQuest({ desc: "Quête terminée", progressText: "Récompense obtenue" });
+
+        // Drop a guaranteed power-up near the player
+        const p = this.entities.player;
+        this.entities.powerups.push({
+            x: p.x,
+            y: p.y - 50,
+            type: 'WARP',
+            dy: 80,
+            r: 16
+        });
+    },
+
+    failQuest() {
+        if (!this.quest.active) return;
+        this.quest.active = false;
+        this.questCooldown = 6;
+        this.spawnFloatingText(this.canvas.width / 2, 120, "Quête échouée", "#f87171", 1.2);
+        UI.updateQuest({ desc: "Quête échouée", progressText: "Réessaye bientôt" });
     },
 
     draw() {
@@ -1463,6 +1552,9 @@ const UI = {
                 printableDifficulties
             );
         }
+
+        this.renderMasteryWall();
+        this.renderMultiplicationSquare();
     },
     showHUD() { document.getElementById('hud').classList.remove('hidden'); },
 
@@ -1487,6 +1579,15 @@ const UI = {
 
     updateLevel(lvl) {
         document.getElementById('levelDisplay').innerText = lvl;
+    },
+
+    updateQuest({ desc, progressText }) {
+        const el = document.getElementById('questStatus');
+        if (!el) return;
+        el.innerHTML = `
+            <span class="font-bold">${desc}</span>
+            ${progressText ? `<span class="text-gray-300 ml-1">${progressText}</span>` : ''}
+        `;
     },
 
     openPrintPage(title, subtitle, items) {
@@ -1562,6 +1663,49 @@ const UI = {
         }
 
         container.innerHTML = html;
+    },
+
+    renderMasteryWall() {
+        const container = document.getElementById('masteryWall');
+        if (!container) return;
+
+        const activeTables = DataManager.config.activeTables || [];
+        if (!activeTables.length) {
+            container.innerHTML = '<div class="text-gray-400 text-sm italic">Activez des tables pour construire le mur.</div>';
+            return;
+        }
+
+        const tiles = activeTables.map(table => {
+            let correct = 0;
+            let attempts = 0;
+            for (let b = 1; b <= 10; b++) {
+                const key = `${table}x${b}`;
+                const d = DataManager.data[key] || { correct: 0, wrong: 0 };
+                correct += d.correct;
+                attempts += d.correct + d.wrong;
+            }
+            const rate = attempts > 0 ? Math.round((correct / attempts) * 100) : null;
+            let status = 'mastery-empty';
+            if (rate !== null) {
+                if (rate >= 95) status = 'mastery-good';
+                else if (rate >= 80) status = 'mastery-warn';
+                else status = 'mastery-bad';
+            }
+            return { table, rate, attempts, status };
+        });
+
+        container.innerHTML = tiles.map(t => `
+            <div class="mastery-tile ${t.status}">
+                <div class="title text-white">Table de ${t.table}</div>
+                <div class="flex justify-between items-center">
+                    <span class="stat">Précision</span>
+                    <span class="font-bold ${t.rate === null ? 'text-gray-500' : t.rate >= 95 ? 'text-green-400' : t.rate >= 80 ? 'text-yellow-400' : 'text-red-400'}">
+                        ${t.rate === null ? '--' : t.rate + '%'}
+                    </span>
+                </div>
+                <div class="stat">${t.attempts} essais</div>
+            </div>
+        `).join('');
     },
 
     showSettings() {
@@ -1707,6 +1851,7 @@ const UI = {
             `;
         }
 
+        this.renderMasteryWall();
         this.renderMultiplicationSquare();
     },
 

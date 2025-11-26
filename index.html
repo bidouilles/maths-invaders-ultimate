@@ -45,6 +45,9 @@
                 <div class="h-2 w-32 bg-gray-800 rounded-full overflow-hidden border border-gray-600">
                     <div id="healthBar" class="h-full bg-green-500 w-full transition-all duration-300"></div>
                 </div>
+                <div id="questStatus" class="text-xs text-cyan-300 bg-black/50 border border-cyan-500 px-3 py-1 rounded-full">
+                    Prochaine quête...
+                </div>
             </div>
         </div>
 
@@ -183,6 +186,16 @@
                 <div class="h-4 w-full bg-gray-800 rounded-full overflow-hidden flex" id="globalProgressBar">
                     <!-- Rempli par JS -->
                 </div>
+            </div>
+        </div>
+
+        <div class="w-full max-w-4xl mt-6" id="masteryWallContainer">
+            <div class="bg-gray-900 border border-gray-700 p-4 rounded-lg">
+                <h3 class="text-xl text-green-300 mb-4 border-b border-gray-700 pb-2 flex justify-between items-center">
+                    <span>Mur des Tables</span>
+                    <span class="text-xs text-gray-400">Remplis les tuiles pour maîtriser</span>
+                </h3>
+                <div id="masteryWall" class="mastery-grid"></div>
             </div>
         </div>
 
