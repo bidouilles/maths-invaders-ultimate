@@ -2,7 +2,7 @@
 
 **Maths Invaders Ultimate** est un jeu éducatif de type "Space Shooter" rétro conçu pour rendre l'apprentissage des tables de multiplication amusant et addictif.
 
-![Maths Invaders Preview](https://via.placeholder.com/800x450?text=Maths+Invaders+Ultimate)
+![Maths Invaders Preview](invaders.png)
 
 ## 🔥 Nouveautés récentes
 - **Boss toutes les 10 bonnes réponses** avec PV multiples, récompenses garanties et vitesse figée pendant l'affrontement.
