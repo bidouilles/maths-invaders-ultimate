@@ -329,6 +329,12 @@ const Game = {
     health: 100,
     level: 1,
     mode: 'marathon',
+    correctSinceBoss: 0,
+    bossThreshold: 10,
+    bossPending: false,
+    bossActive: false,
+    bossHP: 0,
+    bossMaxHP: 0,
 
     // Power-ups
     powerups: {
@@ -421,6 +427,11 @@ const Game = {
         this.combo = 0;
         this.health = 100;
         this.level = 1;
+        this.correctSinceBoss = 0;
+        this.bossPending = false;
+        this.bossActive = false;
+        this.bossHP = 0;
+        this.bossMaxHP = 0;
         this.spawnInterval = 3000;
         this.entities = {
             player: {
@@ -454,6 +465,8 @@ const Game = {
 
         UI.hideMenu();
         UI.showHUD();
+        UI.updateScore(this.score, this.combo, this.health);
+        UI.updateLevel(Math.floor(this.level));
         this.nextWave();
     },
 
@@ -499,6 +512,12 @@ const Game = {
     },
 
     nextWave() {
+        if (this.bossActive) return; // Boss wave already running
+        if (this.bossPending) {
+            this.spawnBossWave();
+            return;
+        }
+
         const problem = MathEngine.generateProblem(this.mode);
         this.currentProblem = problem; // Store for mistake tracking
         UI.updateTarget(problem.a, problem.b);
@@ -540,6 +559,93 @@ const Game = {
                 color: difficultyColor
             });
         });
+    },
+
+    spawnBossWave() {
+        this.bossPending = false;
+        this.bossActive = true;
+
+        const problem = this.getWeakestProblem() || MathEngine.generateProblem(this.mode);
+        problem.startTime = Date.now();
+        this.currentProblem = problem;
+        UI.updateTarget(problem.a, problem.b);
+
+        this.bossMaxHP = 3 + Math.floor(this.level);
+        this.bossHP = this.bossMaxHP;
+
+        const r = 80;
+        this.entities.enemies = [{
+            x: this.canvas.width / 2,
+            y: -r,
+            value: problem.answer,
+            isCorrect: true,
+            isBoss: true,
+            hp: this.bossHP,
+            maxHp: this.bossMaxHP,
+            r: r,
+            shape: this.generateAsteroidShape(r),
+            angle: 0,
+            rotationSpeed: 0.5,
+            speed: this.getEnemySpeed() * 0.6 + 40,
+            color: '#ff66cc'
+        }];
+
+        this.spawnFloatingText(this.canvas.width / 2, this.canvas.height / 2, "BOSS ARRIVE!", "#ff66cc", 2.0);
+    },
+
+    getWeakestProblem() {
+        const active = new Set(DataManager.config.activeTables || []);
+        let weakest = null;
+
+        for (let key in DataManager.data) {
+            const [aStr, bStr] = key.split('x');
+            const a = parseInt(aStr, 10);
+            const b = parseInt(bStr, 10);
+            if (!active.has(a)) continue; // respect active tables
+
+            const stats = DataManager.data[key];
+            const attempts = stats.correct + stats.wrong;
+            if (attempts === 0) continue;
+
+            const rate = stats.correct / attempts;
+
+            if (!weakest) {
+                weakest = { a, b, rate, attempts };
+                continue;
+            }
+
+            // Pick the lowest accuracy; tie-break by attempts (more attempts = higher priority)
+            if (rate < weakest.rate || (rate === weakest.rate && attempts > weakest.attempts)) {
+                weakest = { a, b, rate, attempts };
+            }
+        }
+
+        if (!weakest) return null;
+        return {
+            a: weakest.a,
+            b: weakest.b,
+            answer: weakest.a * weakest.b
+        };
+    },
+
+    handleBossDefeat(boss) {
+        this.bossActive = false;
+        this.bossHP = 0;
+        this.bossMaxHP = 0;
+        this.createExplosion(boss.x, boss.y, '#ff66cc');
+        this.spawnFloatingText(boss.x, boss.y - 20, "BOSS VAINCU!", "#ff66cc", 2.0);
+        DataManager.addXP(200);
+        // Guaranteed reward drop
+        this.entities.powerups.push({
+            x: boss.x,
+            y: boss.y,
+            type: 'SMART',
+            dy: 120,
+            r: 18
+        });
+        // Clear remaining enemies and resume waves
+        this.entities.enemies = [];
+        setTimeout(() => this.nextWave(), this.getSpawnDelay());
     },
 
     restart() {
@@ -733,16 +839,26 @@ const Game = {
                     this.entities.bullets.splice(j, 1);
 
                     if (e.isCorrect) {
-                        this.handleCorrectAnswer();
-                        // Score Popup
-                        this.spawnFloatingText(e.x, e.y, `+${100 * this.combo}`, '#0aff0a');
-                        // Screen Shake
-                        this.shakeIntensity = 5;
+                        if (e.isBoss) {
+                            this.handleCorrectAnswer({ skipBossMeter: true });
+                            e.hp -= 1;
+                            this.spawnFloatingText(e.x, e.y - 10, `BOSS ${Math.max(0, e.hp)}/${e.maxHp}`, '#ff66cc');
+                            this.shakeIntensity = 8;
+                            if (e.hp <= 0) {
+                                this.handleBossDefeat(e);
+                            }
+                        } else {
+                            this.handleCorrectAnswer();
+                            // Score Popup
+                            this.spawnFloatingText(e.x, e.y, `+${100 * this.combo}`, '#0aff0a');
+                            // Screen Shake
+                            this.shakeIntensity = 5;
 
-                        // Remove all enemies of this wave
-                        this.entities.enemies = [];
-                        const delay = this.getSpawnDelay();
-                        setTimeout(() => this.nextWave(), delay);
+                            // Remove all enemies of this wave
+                            this.entities.enemies = [];
+                            const delay = this.getSpawnDelay();
+                            setTimeout(() => this.nextWave(), delay);
+                        }
                         return;
                     } else {
                         this.handleWrongAnswer(e.value);
@@ -760,6 +876,13 @@ const Game = {
                 this.takeDamage(20);
                 this.createExplosion(e.x, e.y, '#ffffff');
                 this.entities.enemies.splice(i, 1);
+                if (e.isBoss) {
+                    this.spawnFloatingText(this.canvas.width / 2, this.canvas.height / 2, "BOSS ÉVADE!", "#ff66cc");
+                    this.bossActive = false;
+                    // Retry boss after a short delay
+                    setTimeout(() => this.spawnBossWave(), this.getSpawnDelay());
+                    return;
+                }
                 if (e.isCorrect) {
                     // Si on percute la bonne réponse, ça compte comme une erreur mais on passe
                     this.handleWrongAnswer("CRASH");
@@ -773,6 +896,12 @@ const Game = {
             // Out of bounds
             if (e.y > this.canvas.height) {
                 this.entities.enemies.splice(i, 1);
+                if (e.isBoss) {
+                    this.spawnFloatingText(this.canvas.width / 2, 120, "BOSS MANQUÉ!", "#ff66cc");
+                    this.bossActive = false;
+                    setTimeout(() => this.spawnBossWave(), this.getSpawnDelay());
+                    return;
+                }
                 if (e.isCorrect) {
                     this.handleWrongAnswer("MISSED");
                     this.entities.enemies = [];
@@ -801,7 +930,8 @@ const Game = {
         }
     },
 
-    handleCorrectAnswer() {
+    handleCorrectAnswer(options = {}) {
+        const { skipBossMeter = false } = options;
         AudioController.correct(this.combo);
         const prob = MathEngine.currentProblem;
         const timeTaken = Date.now() - prob.startTime;
@@ -819,8 +949,17 @@ const Game = {
 
         UI.updateScore(this.score, this.combo, this.health);
 
+        if (!this.bossActive && !skipBossMeter) {
+            this.correctSinceBoss++;
+            if (this.correctSinceBoss >= this.bossThreshold) {
+                this.bossPending = true;
+                this.correctSinceBoss = 0;
+                this.spawnFloatingText(this.canvas.width / 2, 80, "BOSS EN APPROCHE", "#ff66cc", 1.5);
+            }
+        }
+
         // Level up every 5 correct
-        if (DataManager.data[`${prob.a}x${prob.b}`].correct % 5 === 0) {
+        if (!this.bossActive && DataManager.data[`${prob.a}x${prob.b}`].correct % 5 === 0) {
             this.level = Math.min(10, this.level + 0.5); // Faster leveling (was 0.2)
             UI.updateLevel(Math.floor(this.level));
             this.flashAlpha = 0.5; // Flash on level up
@@ -1216,6 +1355,7 @@ const UI = {
     showGameOver(score, mistakes) {
         document.getElementById('hud').classList.add('hidden');
         document.getElementById('statsScreen').classList.remove('hidden');
+        document.body.classList.add('stats-open');
 
         // Update Stats
         document.getElementById('statsTitle').innerText = "MISSION TERMINÉE";
@@ -1393,6 +1533,37 @@ const UI = {
         win.document.close();
     },
 
+    renderMultiplicationSquare() {
+        const container = document.getElementById('multiplicationSquare');
+        if (!container) return;
+
+        const max = 10;
+        const headers = Array.from({ length: max }, (_, i) => i + 1);
+        let html = `<div class="square-cell corner">x</div>`;
+        headers.forEach(h => { html += `<div class="square-cell header">${h}</div>`; });
+
+        for (let a = 1; a <= max; a++) {
+            html += `<div class="square-cell header">${a}</div>`;
+            for (let b = 1; b <= max; b++) {
+                const key = `${a}x${b}`;
+                const d = DataManager.data[key] || { correct: 0, wrong: 0 };
+                const attempts = d.correct + d.wrong;
+                const rate = attempts > 0 ? Math.round((d.correct / attempts) * 100) : null;
+                let status = 'neutral';
+                if (rate !== null) {
+                    if (rate >= 95) status = 'good';
+                    else if (rate >= 80) status = 'warn';
+                    else status = 'bad';
+                }
+                const text = rate === null ? '-' : `${rate}%`;
+                const title = `Table ${a} x ${b} — ${attempts} essais`;
+                html += `<div class="square-cell value ${status}" title="${title}">${text}</div>`;
+            }
+        }
+
+        container.innerHTML = html;
+    },
+
     showSettings() {
         document.getElementById('settingsScreen').classList.remove('hidden');
     },
@@ -1456,6 +1627,7 @@ const UI = {
     showStats() {
         document.getElementById('statsScreen').classList.remove('hidden');
         document.getElementById('hud').classList.add('hidden');
+        document.body.classList.add('stats-open');
 
         document.getElementById('statsTitle').innerText = Game.state === 'gameover' ? "MISSION TERMINÉE" : "RAPPORT PROF";
         document.getElementById('statScore').innerText = Game.score;
@@ -1534,10 +1706,13 @@ const UI = {
                 <div style="width:${pctHard}%" class="bg-red-500 h-full"></div>
             `;
         }
+
+        this.renderMultiplicationSquare();
     },
 
     returnToMenu() {
         Game.state = 'menu';
+        document.body.classList.remove('stats-open');
         this.showMenu();
     }
 };
