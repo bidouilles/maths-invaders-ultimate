@@ -4,6 +4,13 @@
 
 ![Maths Invaders Preview](https://via.placeholder.com/800x450?text=Maths+Invaders+Ultimate)
 
+## 🔥 Nouveautés récentes
+- **Boss toutes les 10 bonnes réponses** avec PV multiples, récompenses garanties et vitesse figée pendant l'affrontement.
+- **Boss ciblé sur la table la plus faible** pour forcer la pratique là où c'est le plus utile.
+- **Quêtes éclairs** (enchaîne X bonnes réponses dans un temps limité) qui donnent un power-up assuré.
+- **Mur des Tables** sur l'écran stats : tuiles par table avec couleur selon la maîtrise.
+- **Stats mobile-friendly** : boutons du bas repliés en grille, carré de multiplication scrollable en horizontal.
+
 ## 🎮 Comment Jouer
 
 Le but est simple : détruisez les astéroïdes qui contiennent la bonne réponse à l'opération affichée !
@@ -77,4 +84,3 @@ Aucune installation nécessaire ! Le jeu est contenu dans un seul fichier HTML.
 
 ---
 *Développé pour l'apprentissage ludique des mathématiques.*
-
