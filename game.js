@@ -1263,13 +1263,13 @@ const UI = {
                 }
             }
         }
-        difficultItems.sort((a, b) => a.rate - b.rate);
+            difficultItems.sort((a, b) => a.rate - b.rate);
 
-        reviewContainer.innerHTML = `
+            reviewContainer.innerHTML = `
             <h3 class="text-xl text-red-400 mb-4 border-b border-gray-700 pb-2 flex justify-between items-center">
                 <span>FICHE DE RÉVISION</span>
                 <div class="flex gap-2">
-                    <button onclick="window.print()" class="text-xs bg-cyan-600 hover:bg-cyan-500 text-white py-1 px-3 rounded font-bold transition-all">
+                    <button class="text-xs bg-cyan-600 hover:bg-cyan-500 text-white py-1 px-3 rounded font-bold transition-all print-review-btn">
                         <i class="fas fa-print mr-1"></i> PDF
                     </button>
                     <i class="fas fa-book-open text-red-400"></i>
@@ -1310,6 +1310,19 @@ const UI = {
         reviewContainer.id = 'reviewSheetContainer';
         // Insert into the parent of historyContainer, replacing where history used to be effectively
         historyContainer.parentNode.insertBefore(reviewContainer, historyContainer);
+
+        const printableDifficulties = difficultItems.map(item => ({
+            title: item.key.replace('x', ' x '),
+            detail: `${Math.round(item.rate * 100)}% de réussite (${item.total} essais)`
+        }));
+        const printBtn = reviewContainer.querySelector('.print-review-btn');
+        if (printBtn) {
+            printBtn.onclick = () => this.openPrintPage(
+                "FICHE DE RÉVISION",
+                "Tables à travailler en priorité",
+                printableDifficulties
+            );
+        }
     },
     showHUD() { document.getElementById('hud').classList.remove('hidden'); },
 
@@ -1334,6 +1347,50 @@ const UI = {
 
     updateLevel(lvl) {
         document.getElementById('levelDisplay').innerText = lvl;
+    },
+
+    openPrintPage(title, subtitle, items) {
+        const win = window.open('', '_blank');
+        if (!win) {
+            alert("Veuillez autoriser les pop-ups pour imprimer.");
+            return;
+        }
+
+        const listHtml = items && items.length
+            ? items.map(it => `
+                <div class="item">
+                    <div class="item-title">${it.title}</div>
+                    <div class="item-detail">${it.detail || ''}</div>
+                </div>
+            `).join('')
+            : '<p class="empty">Aucune difficulté détectée. Bravo !</p>';
+
+        win.document.write(`
+            <!DOCTYPE html>
+            <html lang="fr">
+            <head>
+                <meta charset="UTF-8" />
+                <title>${title}</title>
+                <style>
+                    * { box-sizing: border-box; }
+                    body { font-family: "Arial", sans-serif; background: #fff; color: #111; margin: 0; padding: 32px; }
+                    h1 { margin: 0 0 6px; font-size: 28px; }
+                    h2 { margin: 0 0 24px; font-size: 16px; font-weight: normal; color: #555; }
+                    .item { border: 1px solid #ddd; padding: 12px 16px; border-radius: 10px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+                    .item-title { font-weight: 700; font-size: 16px; }
+                    .item-detail { font-size: 14px; color: #0a7; font-weight: 700; }
+                    .empty { font-size: 16px; font-weight: 600; color: #0a7; }
+                </style>
+            </head>
+            <body>
+                <h1>${title}</h1>
+                <h2>${subtitle}</h2>
+                ${listHtml}
+                <script>window.onload = () => window.print();</script>
+            </body>
+            </html>
+        `);
+        win.document.close();
     },
 
     showSettings() {
@@ -1449,6 +1506,18 @@ const UI = {
                 `;
                 list.appendChild(div);
             });
+        }
+        const printableReview = reviewItems.slice(0, 10).map(item => ({
+            title: item.key.replace('x', ' x '),
+            detail: `${Math.round(item.rate * 100)}% - ${item.attempts} essais`
+        }));
+        const reviewPrintBtn = document.getElementById('reviewPrintBtn');
+        if (reviewPrintBtn) {
+            reviewPrintBtn.onclick = () => this.openPrintPage(
+                "À Réviser (Difficulté)",
+                "Tables avec précision < 80%",
+                printableReview
+            );
         }
 
         // Global Progress Bar
