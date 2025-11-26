@@ -1,0 +1,398 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600;700&display=swap');
+
+:root {
+    --neon-blue: #00f3ff;
+    --neon-pink: #bc13fe;
+    --neon-green: #0aff0a;
+    --neon-red: #ff003c;
+    --neon-yellow: #f1c40f;
+    --bg-dark: #050510;
+}
+
+body {
+    background-color: var(--bg-dark);
+    color: white;
+    font-family: 'Rajdhani', sans-serif;
+    overflow: hidden;
+    /* Empêche le scroll pendant le jeu */
+    touch-action: none;
+    /* Empêche le zoom/scroll tactile */
+}
+
+.retro-font {
+    font-family: 'Press Start 2P', monospace;
+}
+
+/* Effets Néon */
+.neon-text-blue {
+    text-shadow: 0 0 5px var(--neon-blue), 0 0 10px var(--neon-blue);
+    color: var(--neon-blue);
+}
+
+.neon-text-pink {
+    text-shadow: 0 0 5px var(--neon-pink), 0 0 10px var(--neon-pink);
+    color: var(--neon-pink);
+}
+
+.neon-border {
+    border: 2px solid var(--neon-blue);
+    box-shadow: 0 0 10px var(--neon-blue), inset 0 0 10px var(--neon-blue);
+}
+
+.btn-neon {
+    background: rgba(0, 243, 255, 0.1);
+    border: 2px solid var(--neon-blue);
+    color: var(--neon-blue);
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    box-shadow: 0 0 5px var(--neon-blue);
+}
+
+.btn-neon:hover {
+    background: var(--neon-blue);
+    color: #000;
+    box-shadow: 0 0 20px var(--neon-blue);
+    transform: scale(1.05);
+}
+
+.btn-red {
+    border-color: var(--neon-red);
+    color: var(--neon-red);
+    background: rgba(255, 0, 60, 0.1);
+    box-shadow: 0 0 5px var(--neon-red);
+}
+
+.btn-red:hover {
+    background: var(--neon-red);
+    color: white;
+    box-shadow: 0 0 20px var(--neon-red);
+}
+
+/* Canvas */
+#gameCanvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+/* UI Overlay Layers */
+#ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 10;
+    pointer-events: none;
+    /* Laisse passer les clics vers le canvas si pas sur un bouton */
+}
+
+.interactive {
+    pointer-events: auto;
+}
+
+.modal {
+    backdrop-filter: blur(5px);
+    background: rgba(5, 5, 16, 0.9);
+}
+
+/* Animations */
+@keyframes pulse-red {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 0, 60, 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 10px rgba(255, 0, 60, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 0, 60, 0);
+    }
+}
+
+.difficulty-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+@keyframes pop {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.5);
+        color: #fff;
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.pop-anim {
+    animation: pop 0.2s ease-out;
+}
+
+body.stats-open {
+    touch-action: auto;
+    overflow: auto;
+}
+
+#statsScreen {
+    touch-action: auto;
+    overscroll-behavior: contain;
+}
+
+/* Print Styles for PDF */
+@media print {
+    body {
+        background: white;
+        color: black;
+    }
+
+    #gameCanvas,
+    #hud,
+    #mainMenu,
+    #settingsScreen,
+    .no-print {
+        display: none !important;
+    }
+
+    #statsScreen {
+        position: static;
+        background: white;
+        width: 100%;
+        height: auto;
+        padding: 0;
+        overflow: visible;
+    }
+
+    .bg-gray-900 {
+        background: white !important;
+        border: 1px solid #ccc;
+        color: black;
+    }
+
+    .text-purple-400,
+    .text-cyan-400,
+    .text-green-400,
+    .text-red-400,
+    .text-yellow-400 {
+        color: black !important;
+        font-weight: bold;
+    }
+
+    h2,
+    h3 {
+        color: black !important;
+        border-bottom: 2px solid #000;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    th,
+    td {
+        border: 1px solid #ccc;
+        padding: 8px;
+        text-align: left;
+    }
+
+    ::-webkit-scrollbar {
+        display: none;
+    }
+
+    /* Review Sheet Print Specifics */
+    #reviewSheetContainer {
+        border: 2px solid #000 !important;
+        background: #fff !important;
+        color: #000 !important;
+        page-break-inside: avoid;
+    }
+
+    #reviewSheetContainer h3 {
+        color: #d32f2f !important;
+        border-bottom: 2px solid #d32f2f !important;
+    }
+
+    #reviewSheetContainer .bg-gray-800 {
+        background: #fff !important;
+        border: 1px solid #000 !important;
+        color: #000 !important;
+    }
+
+    #reviewSheetContainer .text-white {
+        color: #000 !important;
+    }
+
+    #reviewSheetContainer .text-red-500 {
+        color: #d32f2f !important;
+        font-weight: bold;
+    }
+
+    #reviewSheetContainer .text-yellow-500 {
+        color: #f57f17 !important;
+        font-weight: bold;
+    }
+
+    /* Stats Review Container Print Styles (Same as Review Sheet) */
+    #statsReviewContainer {
+        border: 2px solid #000 !important;
+        background: #fff !important;
+        color: #000 !important;
+        page-break-inside: avoid;
+        display: block !important;
+    }
+
+    #statsReviewContainer h3 {
+        color: #d32f2f !important;
+        border-bottom: 2px solid #d32f2f !important;
+    }
+
+    #statsReviewContainer button {
+        display: none !important;
+    }
+
+    #statsReviewContainer .bg-black\/50 {
+        background: #fff !important;
+        border: 1px solid #000 !important;
+        color: #000 !important;
+    }
+
+    #statsReviewContainer .text-white {
+        color: #000 !important;
+    }
+
+#statsReviewContainer .text-red-300 {
+    color: #d32f2f !important;
+}
+}
+
+/* Multiplication square */
+#multiplicationSquareContainer .square-grid {
+    display: grid;
+    grid-template-columns: repeat(11, minmax(48px, 1fr));
+    gap: 6px;
+}
+
+#multiplicationSquareContainer .square-cell {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    color: #cbd5f5;
+    text-align: center;
+    padding: 10px 4px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+#multiplicationSquareContainer .square-cell.header {
+    background: rgba(17, 24, 39, 0.8);
+    color: #9ca3af;
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+#multiplicationSquareContainer .square-cell.corner {
+    background: rgba(15, 23, 42, 0.4);
+    color: #6b7280;
+}
+
+#multiplicationSquareContainer .square-cell.good {
+    background: rgba(34, 197, 94, 0.15);
+    color: #34d399;
+    border-color: rgba(34, 197, 94, 0.35);
+}
+
+#multiplicationSquareContainer .square-cell.warn {
+    background: rgba(234, 179, 8, 0.15);
+    color: #fbbf24;
+    border-color: rgba(234, 179, 8, 0.35);
+}
+
+#multiplicationSquareContainer .square-cell.bad {
+    background: rgba(248, 113, 113, 0.15);
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.35);
+}
+
+#multiplicationSquareContainer .square-cell.neutral {
+    color: #6b7280;
+}
+
+@media (max-width: 480px) {
+    #multiplicationSquare {
+        overflow-x: auto;
+    }
+    #multiplicationSquareContainer .square-grid {
+        grid-template-columns: repeat(11, minmax(20px, 1fr));
+        gap: 2px;
+        width: 100%;
+        min-width: 420px;
+    }
+    #multiplicationSquareContainer .square-cell {
+        padding: 3px 2px;
+        font-size: 8px;
+    }
+    #multiplicationSquareContainer .square-cell.header {
+        font-size: 8px;
+    }
+}
+/* Mastery wall */
+.mastery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+}
+
+.mastery-tile {
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 12px;
+    padding: 12px;
+    background: rgba(15, 23, 42, 0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mastery-tile:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+}
+
+.mastery-tile .title {
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.mastery-tile .stat {
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.mastery-good {
+    border-color: rgba(34, 197, 94, 0.5);
+    box-shadow: 0 0 12px rgba(34, 197, 94, 0.2);
+}
+
+.mastery-warn {
+    border-color: rgba(234, 179, 8, 0.5);
+    box-shadow: 0 0 12px rgba(234, 179, 8, 0.2);
+}
+
+.mastery-bad {
+    border-color: rgba(248, 113, 113, 0.5);
+    box-shadow: 0 0 12px rgba(248, 113, 113, 0.2);
+}
+
+.mastery-empty {
+    opacity: 0.6;
+}
