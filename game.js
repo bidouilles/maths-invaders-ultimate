@@ -17,10 +17,10 @@ const SHIPS = [
 
 const RANKS = [
     { xp: 0, title: "CADET" },
-    { xp: 2000, title: "PILOTE" },
-    { xp: 8000, title: "CAPITAINE" },
-    { xp: 20000, title: "COMMANDANT" },
-    { xp: 50000, title: "LÉGENDE" }
+    { xp: 10000, title: "PILOTE" },
+    { xp: 40000, title: "CAPITAINE" },
+    { xp: 120000, title: "COMMANDANT" },
+    { xp: 300000, title: "LÉGENDE" }
 ];
 
 /* --- 1. DATA MANAGER & ADAPTIVE LEARNING --- */
@@ -100,9 +100,11 @@ const DataManager = {
     },
 
     addXP(amount) {
-        this.xp += amount;
-        if (this.xp > 5000 && !this.unlockedShips.includes(1)) this.unlockedShips.push(1);
-        if (this.xp > 15000 && !this.unlockedShips.includes(2)) this.unlockedShips.push(2);
+        // Make progression slower: convert score to XP with damping and floor
+        const gained = Math.max(50, Math.floor(amount * 0.2));
+        this.xp += gained;
+        if (this.xp > 20000 && !this.unlockedShips.includes(1)) this.unlockedShips.push(1);
+        if (this.xp > 80000 && !this.unlockedShips.includes(2)) this.unlockedShips.push(2);
         this.save();
     },
 
