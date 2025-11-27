@@ -155,22 +155,27 @@
                         <div class="text-xs text-gray-400">Précision</div>
                     </div>
                 </div>
+                <div class="mt-3 text-xs text-gray-400" id="statContext">Tables actives : --</div>
             </div>
 
-            <!-- To Review List -->
-            <div id="statsReviewContainer" class="bg-gray-900 border border-red-900 p-4 rounded-lg">
+            <!-- Mistakes for the last mission -->
+            <div id="mistakesContainer" class="bg-gray-900 border border-red-900 p-4 rounded-lg">
                 <h3 class="text-xl text-red-400 mb-4 border-b border-gray-700 pb-2 flex justify-between items-center">
-                    <span>À Réviser (Difficulté)</span>
-                    <div class="flex gap-2">
-                        <button id="reviewPrintBtn"
-                            class="text-xs bg-cyan-600 hover:bg-cyan-500 text-white py-1 px-3 rounded font-bold transition-all">
-                            <i class="fas fa-print mr-1"></i> PDF
-                        </button>
-                        <i class="fas fa-exclamation-triangle text-red-400"></i>
-                    </div>
+                    <span>Erreurs de la mission</span>
+                    <i class="fas fa-exclamation-triangle text-red-400"></i>
                 </h3>
-                <div id="reviewList" class="max-h-96 overflow-y-auto text-sm space-y-2 pr-2">
+                <div id="mistakesList" class="max-h-96 overflow-y-auto text-sm space-y-2 pr-2">
                     <!-- Rempli par JS -->
+                </div>
+            </div>
+
+            <div class="bg-gray-900 border border-yellow-700 p-4 rounded-lg">
+                <h3 class="text-xl text-yellow-300 mb-4 border-b border-gray-800 pb-2 flex justify-between items-center">
+                    <span>Classement par plages de tables</span>
+                    <span class="text-xs text-gray-400">Compare des niveaux équitables</span>
+                </h3>
+                <div id="scoreBrackets" class="space-y-3 text-sm">
+                    <!-- Rempli en JS -->
                 </div>
             </div>
         </div>

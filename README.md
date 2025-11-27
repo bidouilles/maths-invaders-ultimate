@@ -76,12 +76,22 @@ Aucune installation nécessaire ! Le jeu est contenu dans un seul fichier HTML.
 
 ### Combo & Score
 - Chaque bonne réponse augmente votre combo (multiplicateur de score).
+- Le gain de points par tir correct dépend de la table et de la difficulté :  
+  `points = (70 + 6 * max(table)) * combo * multiplicateur_difficulté`  
+  - Tables 2‑4 ≈ 80‑95 pts en début de combo, tables 8‑10 ≈ 120‑130 pts.  
+  - Multiplicateurs : Facile 0.85 · Normal 1 · Difficile 1.2 · Extrême 1.4.
 - Une erreur réinitialise le combo à 0.
 - Les bonnes réponses restaurent un peu de vie.
+- Les scores/XP sont donc comparables à difficulté et plages de tables équivalentes.
 
 ### Niveaux de Difficulté
 - La vitesse des astéroïdes augmente avec le niveau.
 - Le niveau augmente tous les 5 calculs réussis sur une même table.
+
+### Plages de tables (classement équitable)
+- Les scores sont classés par plages : 2‑4, 5‑7, 8‑10 (affiché dans l’écran stats).
+- Activez uniquement les tables que vous travaillez ; votre score se placera dans la plage correspondante.
+- L’écran de stats indique aussi la difficulté et les tables actives pour garder les comparaisons justes.
 
 ---
 *Développé pour l'apprentissage ludique des mathématiques.*

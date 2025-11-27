@@ -15,6 +15,20 @@ const SHIPS = [
     { id: 2, name: "Destroyer", unlockXp: 15000, color: "#ff9100" }
 ];
 
+const TABLE_BRACKETS = [
+    { id: '2-4', label: 'Tables 2 à 4', min: 2, max: 4 },
+    { id: '5-7', label: 'Tables 5 à 7', min: 5, max: 7 },
+    { id: '8-10', label: 'Tables 8 à 10', min: 8, max: 10 }
+];
+
+function getTableBracket(activeTables = []) {
+    if (!activeTables.length) return null;
+    const maxTable = Math.max(...activeTables);
+    if (maxTable <= 4) return '2-4';
+    if (maxTable <= 7) return '5-7';
+    return '8-10';
+}
+
 const RANKS = [
     { xp: 0, title: "CADET" },
     { xp: 10000, title: "PILOTE" },
@@ -328,6 +342,7 @@ const Game = {
 
     score: 0,
     combo: 0,
+    lastScoreGain: null,
     health: 100,
     level: 1,
     mode: 'marathon',
@@ -437,6 +452,7 @@ const Game = {
         this.state = 'playing';
         this.score = 0;
         this.combo = 0;
+        this.lastScoreGain = null;
         this.health = 100;
         this.level = 1;
         this.correctSinceBoss = 0;
@@ -882,9 +898,9 @@ const Game = {
                                 this.handleBossDefeat(e);
                             }
                         } else {
-                            this.handleCorrectAnswer();
+                            const gain = this.handleCorrectAnswer();
                             // Score Popup
-                            this.spawnFloatingText(e.x, e.y, `+${100 * this.combo}`, '#0aff0a');
+                            this.spawnFloatingText(e.x, e.y, `+${gain.points}`, '#0aff0a');
                             // Screen Shake
                             this.shakeIntensity = 5;
 
@@ -973,7 +989,9 @@ const Game = {
         DataManager.recordResult(prob.a, prob.b, true, timeTaken);
 
         this.combo++;
-        this.score += 100 * this.combo;
+        const gain = this.calculateScoreGain(prob, this.combo);
+        this.score += gain.points;
+        this.lastScoreGain = gain;
         this.health = Math.min(100, this.health + 5);
 
         if (this.quest.active) {
@@ -1005,6 +1023,8 @@ const Game = {
             UI.updateLevel(Math.floor(this.level));
             this.flashAlpha = 0.5; // Flash on level up
         }
+
+        return gain;
     },
 
     handleWrongAnswer(val) {
@@ -1352,6 +1372,22 @@ const Game = {
         return Math.max(200, base - (this.level * reduction));
     },
 
+    getDifficultyMultiplier() {
+        const diff = DataManager.config.difficulty;
+        if (diff === 'easy') return 0.85;
+        if (diff === 'hard') return 1.2;
+        if (diff === 'extreme') return 1.4;
+        return 1.0; // normal
+    },
+
+    calculateScoreGain(prob, combo) {
+        // Reward tougher tables and difficulty; keep the combo excitement.
+        const tableWeight = Math.max(prob.a, prob.b);
+        const base = 70 + (tableWeight * 6); // tables 2-4 ~82-94, tables 8-10 ~118-130
+        const points = Math.round(base * combo * this.getDifficultyMultiplier());
+        return { points, base, tableWeight, combo };
+    },
+
     getChaoticFactor() {
         return 0; // Disabled
     },
@@ -1368,14 +1404,16 @@ const Game = {
             }
 
             // Record Session
-            const total = this.score / 100; // Approx correct answers (ignoring combos for simplicity or track separately)
-            // Better: track actual correct count in Game
+            const tablesSnapshot = (DataManager.config.activeTables || []).slice();
             DataManager.addSession({
                 date: new Date().toISOString(),
                 mode: this.mode,
                 score: this.score,
                 mistakes: this.sessionMistakes.length,
-                rank: DataManager.xp // Snapshot of rank
+                rank: DataManager.xp, // Snapshot of rank
+                difficulty: DataManager.config.difficulty,
+                tables: tablesSnapshot,
+                tableBracket: getTableBracket(tablesSnapshot)
             });
             DataManager.save();
         }
@@ -1453,21 +1491,32 @@ const UI = {
         document.getElementById('statScore').innerText = score;
         // Accuracy? We'd need to track total shots vs hits. For now just score.
         document.getElementById('statAccuracy').innerText = "-";
+        const activeTables = DataManager.config.activeTables || [];
+        const bracketId = getTableBracket(activeTables);
+        const bracketLabel = TABLE_BRACKETS.find(b => b.id === bracketId)?.label || 'Aucune plage';
+        const statContext = document.getElementById('statContext');
+        if (statContext) {
+            const tablesText = activeTables.length ? activeTables.join(', ') : 'aucune';
+            statContext.innerText = `Tables actives : ${tablesText} · Plage : ${bracketLabel} · Difficulté : ${DataManager.config.difficulty.toUpperCase()}`;
+        }
 
-        // Mistakes List
-        const list = document.getElementById('reviewList');
-        list.innerHTML = '';
-        if (mistakes && mistakes.length > 0) {
-            // Dedup
-            const unique = [...new Set(mistakes)];
-            unique.forEach(m => {
-                const div = document.createElement('div');
-                div.className = "text-red-300 border-b border-red-900/50 pb-1";
-                div.innerText = m;
-                list.appendChild(div);
-            });
-        } else {
-            list.innerHTML = '<div class="text-green-400 text-center italic">Aucune erreur ! Mission parfaite.</div>';
+        // Mistakes List (current mission)
+        const mistakesContainer = document.getElementById('mistakesContainer');
+        const list = document.getElementById('mistakesList');
+        if (list) {
+            list.innerHTML = '';
+            if (mistakes && mistakes.length > 0) {
+                const unique = [...new Set(mistakes)];
+                unique.forEach(m => {
+                    const div = document.createElement('div');
+                    div.className = "text-red-300 border-b border-red-900/50 pb-1";
+                    div.innerText = m;
+                    list.appendChild(div);
+                });
+            } else {
+                list.innerHTML = '<div class="text-green-400 text-center italic">Aucune erreur ! Mission parfaite.</div>';
+            }
+            if (mistakesContainer) mistakesContainer.classList.remove('hidden');
         }
 
         // Global Progress Bar (XP)
@@ -1479,84 +1528,10 @@ const UI = {
 
         bar.innerHTML = `<div class="h-full bg-purple-500" style="width: ${progress}%"></div>`;
 
-        // --- REVIEW SHEET (Fiche de Révision) ---
-        const reviewContainer = document.createElement('div');
-        reviewContainer.className = "w-full max-w-4xl mt-6 bg-gray-900 border border-red-900 p-4 rounded-lg";
-
-        // Filter difficult items (< 85% accuracy)
-        const difficultItems = [];
-        for (let key in DataManager.data) {
-            const d = DataManager.data[key];
-            if (d.correct + d.wrong > 0) {
-                const rate = d.correct / (d.correct + d.wrong);
-                if (rate < 0.85) {
-                    difficultItems.push({ key, rate, total: d.correct + d.wrong });
-                }
-            }
-        }
-            difficultItems.sort((a, b) => a.rate - b.rate);
-
-            reviewContainer.innerHTML = `
-            <h3 class="text-xl text-red-400 mb-4 border-b border-gray-700 pb-2 flex justify-between items-center">
-                <span>FICHE DE RÉVISION</span>
-                <div class="flex gap-2">
-                    <button class="text-xs bg-cyan-600 hover:bg-cyan-500 text-white py-1 px-3 rounded font-bold transition-all print-review-btn">
-                        <i class="fas fa-print mr-1"></i> PDF
-                    </button>
-                    <i class="fas fa-book-open text-red-400"></i>
-                </div>
-            </h3>
-            <div class="text-gray-300 text-sm mb-4">
-                ${difficultItems.length > 0
-                ? "Voici les tables à travailler en priorité (précision < 85%) :"
-                : "Aucune difficulté majeure détectée ! Continuez comme ça !"}
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 max-h-[60vh] overflow-y-auto pr-2">
-                ${difficultItems.map(item => `
-                    <div class="bg-gray-800 p-3 rounded border border-red-500/30 flex justify-between items-center">
-                        <span class="font-bold text-white text-lg">${item.key.replace('x', ' x ')}</span>
-                        <span class="text-xs ${item.rate < 0.5 ? 'text-red-500' : 'text-yellow-500'} font-bold">
-                            ${Math.round(item.rate * 100)}%
-                        </span>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-
-        // Insert Review Sheet BEFORE History (History is removed now, so just append to historyContainer parent or replace it)
-        // Actually, the previous code inserted it before historyContainer.
-        // Since we want to REMOVE history, we can just clear the historyContainer and put the review sheet there,
-        // OR we can just use a dedicated container.
-        // The previous code did: parent.insertBefore(reviewContainer, historyContainer);
-
-        const historyContainer = document.getElementById('historyContainer');
-        // We want to remove the history table entirely.
-        historyContainer.innerHTML = '';
-        historyContainer.className = "hidden"; // Hide it
-
-        // Check if already exists to avoid dupes if we don't clear
-        const existingReview = document.getElementById('reviewSheetContainer');
-        if (existingReview) existingReview.remove();
-
-        reviewContainer.id = 'reviewSheetContainer';
-        // Insert into the parent of historyContainer, replacing where history used to be effectively
-        historyContainer.parentNode.insertBefore(reviewContainer, historyContainer);
-
-        const printableDifficulties = difficultItems.map(item => ({
-            title: item.key.replace('x', ' x '),
-            detail: `${Math.round(item.rate * 100)}% de réussite (${item.total} essais)`
-        }));
-        const printBtn = reviewContainer.querySelector('.print-review-btn');
-        if (printBtn) {
-            printBtn.onclick = () => this.openPrintPage(
-                "FICHE DE RÉVISION",
-                "Tables à travailler en priorité",
-                printableDifficulties
-            );
-        }
-
+        this.renderRevisionSheet();
         this.renderMasteryWall();
         this.renderMultiplicationSquare();
+        this.renderScoreBrackets();
     },
     showHUD() { document.getElementById('hud').classList.remove('hidden'); },
 
@@ -1599,14 +1574,32 @@ const UI = {
             return;
         }
 
-        const listHtml = items && items.length
-            ? items.map(it => `
-                <div class="item">
-                    <div class="item-title">${it.title}</div>
-                    <div class="item-detail">${it.detail || ''}</div>
+        const hasSections = items && items.length && items[0].rows;
+        const listHtml = !items || !items.length ? '<p class="empty">Aucune difficulté détectée. Bravo !</p>' :
+            hasSections
+                ? `
+                <div class="section-grid">
+                    ${items.map(section => `
+                        <div class="section">
+                            <div class="section-title">${section.title}</div>
+                            <ul class="problems">
+                                ${section.rows.map(row => `
+                                    <li class="problem-row">
+                                        <span class="label">${row.label}</span>
+                                        <span class="meta">${row.detail || ''}</span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    `).join('')}
                 </div>
-            `).join('')
-            : '<p class="empty">Aucune difficulté détectée. Bravo !</p>';
+                `
+                : items.map(it => `
+                    <div class="item">
+                        <div class="item-title">${it.title}</div>
+                        <div class="item-detail">${it.detail || ''}</div>
+                    </div>
+                `).join('');
 
         win.document.write(`
             <!DOCTYPE html>
@@ -1623,6 +1616,14 @@ const UI = {
                     .item-title { font-weight: 700; font-size: 16px; }
                     .item-detail { font-size: 14px; color: #0a7; font-weight: 700; }
                     .empty { font-size: 16px; font-weight: 600; color: #0a7; }
+                    .section-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); grid-gap: 12px; }
+                    .section { border: 1px solid #ddd; padding: 12px 14px; border-radius: 10px; break-inside: avoid; }
+                    .section-title { font-weight: 700; font-size: 15px; margin-bottom: 8px; color: #b00020; }
+                    .problems { list-style: none; padding: 0; margin: 0; }
+                    .problem-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dashed #eee; }
+                    .problem-row:last-child { border-bottom: none; }
+                    .label { font-weight: 700; }
+                    .meta { font-size: 12px; color: #0a7; font-weight: 700; }
                 </style>
             </head>
             <body>
@@ -1710,6 +1711,141 @@ const UI = {
         `).join('');
     },
 
+    renderRevisionSheet() {
+        const historyContainer = document.getElementById('historyContainer');
+        if (!historyContainer) return;
+
+        const difficultItems = [];
+        const grouped = {};
+        for (let key in DataManager.data) {
+            const d = DataManager.data[key];
+            if (d.correct + d.wrong > 0) {
+                const rate = d.correct / (d.correct + d.wrong);
+                if (rate < 0.85) {
+                    const [aStr, bStr] = key.split('x');
+                    const a = parseInt(aStr, 10);
+                    const b = parseInt(bStr, 10);
+                    const entry = { key, a, b, rate, total: d.correct + d.wrong, answer: a * b };
+                    difficultItems.push(entry);
+                    if (!grouped[a]) grouped[a] = { table: a, rows: [] };
+                    grouped[a].rows.push({ b, answer: entry.answer, rate: Math.round(rate * 100), attempts: entry.total });
+                }
+            }
+        }
+        difficultItems.sort((a, b) => a.rate - b.rate);
+        const groupedList = Object.values(grouped).sort((a, b) => a.table - b.table).map(group => {
+            group.rows.sort((a, b) => a.rate - b.rate);
+            return group;
+        });
+
+        const reviewContainer = document.createElement('div');
+        reviewContainer.className = "w-full max-w-4xl mt-6 bg-gray-900 border border-red-900 p-4 rounded-lg";
+        reviewContainer.id = 'reviewSheetContainer';
+
+        reviewContainer.innerHTML = `
+            <h3 class="text-xl text-red-400 mb-4 border-b border-gray-700 pb-2 flex justify-between items-center">
+                <span>FICHE DE RÉVISION</span>
+                <div class="flex gap-2">
+                    <button class="text-xs bg-cyan-600 hover:bg-cyan-500 text-white py-1 px-3 rounded font-bold transition-all print-review-btn">
+                        <i class="fas fa-print mr-1"></i> PDF
+                    </button>
+                    <i class="fas fa-book-open text-red-400"></i>
+                </div>
+            </h3>
+            <div class="text-gray-300 text-sm mb-4">
+                ${difficultItems.length > 0
+                ? "Voici les tables à travailler en priorité (précision < 85%) :"
+                : "Aucune difficulté majeure détectée ! Continuez comme ça !"}
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto pr-2">
+                ${groupedList.length ? groupedList.map(group => `
+                    <div class="bg-gray-800 p-3 rounded border border-red-500/30">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="font-bold text-white text-lg">Table de ${group.table}</span>
+                            <span class="text-xs text-gray-300">${group.rows.length} difficultés</span>
+                        </div>
+                        <ul class="space-y-1 text-sm text-gray-200">
+                            ${group.rows.map(r => `
+                                <li class="flex justify-between items-center border-b border-red-500/20 pb-1">
+                                    <span>${group.table} x ${r.b} = ${r.answer}</span>
+                                    <span class="${r.rate < 50 ? 'text-red-400' : 'text-yellow-300'} font-bold text-xs">${r.rate}% · ${r.attempts} essais</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                `).join('') : '<div class="text-green-400 text-center italic">Aucune difficulté majeure détectée !</div>'}
+            </div>
+        `;
+
+        historyContainer.innerHTML = '';
+        historyContainer.className = "hidden";
+
+        const existingReview = document.getElementById('reviewSheetContainer');
+        if (existingReview) existingReview.remove();
+
+        historyContainer.parentNode.insertBefore(reviewContainer, historyContainer);
+
+        const printableDifficulties = groupedList.map(group => ({
+            title: `Table de ${group.table}`,
+            rows: group.rows.map(r => ({
+                label: `${group.table} x ${r.b} = ${r.answer}`,
+                detail: `${r.rate}% · ${r.attempts} essais`
+            }))
+        }));
+        const printBtn = reviewContainer.querySelector('.print-review-btn');
+        if (printBtn) {
+            printBtn.onclick = () => this.openPrintPage(
+                "FICHE DE RÉVISION",
+                "Tables à travailler en priorité",
+                printableDifficulties
+            );
+        }
+    },
+
+    renderScoreBrackets() {
+        const container = document.getElementById('scoreBrackets');
+        if (!container) return;
+
+        const sessions = DataManager.sessions || [];
+        const currentBracket = getTableBracket(DataManager.config.activeTables);
+        const cards = TABLE_BRACKETS.map(bracket => {
+            const best = sessions
+                .filter(s => s.tableBracket === bracket.id)
+                .reduce((acc, s) => (!acc || s.score > acc.score ? s : acc), null);
+
+            const isActive = currentBracket === bracket.id;
+            if (!best) {
+                return `
+                    <div class="p-3 border rounded ${isActive ? 'border-yellow-400 bg-yellow-900/10' : 'border-gray-700 bg-black/30'}">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-white">${bracket.label}</span>
+                            ${isActive ? '<span class="text-[10px] px-2 py-1 rounded bg-yellow-500/20 text-yellow-300 font-bold uppercase">Actuel</span>' : ''}
+                        </div>
+                        <div class="text-gray-400 text-xs mt-1">Pas encore de score</div>
+                    </div>
+                `;
+            }
+
+            const dateLabel = best.date ? new Date(best.date).toLocaleDateString('fr-FR') : '';
+            const diffLabel = best.difficulty ? best.difficulty.toUpperCase() : '---';
+            return `
+                <div class="p-3 border rounded ${isActive ? 'border-yellow-400 bg-yellow-900/10' : 'border-gray-700 bg-black/30'}">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-white">${bracket.label}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] px-2 py-1 rounded bg-gray-700 text-gray-200 font-bold uppercase">${diffLabel}</span>
+                            ${isActive ? '<span class="text-[10px] px-2 py-1 rounded bg-yellow-500/20 text-yellow-300 font-bold uppercase">Actuel</span>' : ''}
+                        </div>
+                    </div>
+                    <div class="text-lg font-bold text-white mt-1">${best.score}</div>
+                    <div class="text-xs text-gray-400">Meilleur score · ${dateLabel || 'date inconnue'}</div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = cards.join('');
+    },
+
     showSettings() {
         document.getElementById('settingsScreen').classList.remove('hidden');
     },
@@ -1781,7 +1917,6 @@ const UI = {
         // Calculate detailed stats
         let totalAttempts = 0;
         let totalCorrect = 0;
-        let reviewItems = [];
         let mastered = 0, learning = 0, hard = 0;
 
         for (let key in DataManager.data) {
@@ -1795,7 +1930,6 @@ const UI = {
                 // Categorization
                 if (rate < 0.8) {
                     hard++;
-                    reviewItems.push({ key, rate, attempts: attempts });
                 } else if (rate < 0.95) {
                     learning++;
                 } else {
@@ -1807,35 +1941,21 @@ const UI = {
         // Accuracy
         const acc = totalAttempts > 0 ? Math.round((totalCorrect / totalAttempts) * 100) : 0;
         document.getElementById('statAccuracy').innerText = `${acc}%`;
-
-        // Fill Review List (Top 5 worst)
-        reviewItems.sort((a, b) => a.rate - b.rate);
-        const list = document.getElementById('reviewList');
-        list.innerHTML = '';
-        if (reviewItems.length === 0) {
-            list.innerHTML = '<div class="text-green-400 text-center py-4">Rien à signaler. Excellent travail !</div>';
-        } else {
-            reviewItems.slice(0, 10).forEach(item => {
-                const div = document.createElement('div');
-                div.className = "flex justify-between items-center bg-black/50 p-2 rounded border-l-2 border-red-500";
-                div.innerHTML = `
-                    <span class="font-bold text-white">${item.key}</span>
-                    <span class="text-xs text-red-300">${Math.round(item.rate * 100)}% (sur ${item.attempts} essais)</span>
-                `;
-                list.appendChild(div);
-            });
+        const activeTables = DataManager.config.activeTables || [];
+        const bracketId = getTableBracket(activeTables);
+        const bracketLabel = TABLE_BRACKETS.find(b => b.id === bracketId)?.label || 'Aucune plage';
+        const statContext = document.getElementById('statContext');
+        if (statContext) {
+            const tablesText = activeTables.length ? activeTables.join(', ') : 'aucune';
+            statContext.innerText = `Tables actives : ${tablesText} · Plage : ${bracketLabel} · Difficulté : ${DataManager.config.difficulty.toUpperCase()}`;
         }
-        const printableReview = reviewItems.slice(0, 10).map(item => ({
-            title: item.key.replace('x', ' x '),
-            detail: `${Math.round(item.rate * 100)}% - ${item.attempts} essais`
-        }));
-        const reviewPrintBtn = document.getElementById('reviewPrintBtn');
-        if (reviewPrintBtn) {
-            reviewPrintBtn.onclick = () => this.openPrintPage(
-                "À Réviser (Difficulté)",
-                "Tables avec précision < 80%",
-                printableReview
-            );
+
+        // Reset mistakes panel when opening stats from menu
+        const mistakesContainer = document.getElementById('mistakesContainer');
+        const mistakesList = document.getElementById('mistakesList');
+        if (mistakesContainer && mistakesList) {
+            mistakesContainer.classList.add('hidden');
+            mistakesList.innerHTML = '<div class="text-gray-400 text-center italic">Joue une partie pour voir tes erreurs ici.</div>';
         }
 
         // Global Progress Bar
@@ -1853,8 +1973,10 @@ const UI = {
             `;
         }
 
+        this.renderRevisionSheet();
         this.renderMasteryWall();
         this.renderMultiplicationSquare();
+        this.renderScoreBrackets();
     },
 
     returnToMenu() {
