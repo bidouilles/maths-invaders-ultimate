@@ -10,6 +10,7 @@
 - **Quêtes éclairs** (enchaîne X bonnes réponses dans un temps limité) qui donnent un power-up assuré.
 - **Mur des Tables** sur l'écran stats : tuiles par table avec couleur selon la maîtrise.
 - **Stats mobile-friendly** : boutons du bas repliés en grille, carré de multiplication scrollable en horizontal.
+- **Selector de vaisseaux** compact : noms/XP affichés sous les icônes, style rétro éclairé.
 
 ## 🎮 Comment Jouer
 
